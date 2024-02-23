@@ -79,6 +79,7 @@ static const nrfx_rtc_t rtc = NRFX_RTC_INSTANCE(NRF_CLOCK_RTC_INSTANCE);
 /*---------------------------------------------------------------------------*/
 static rtimer_clock_t last_isr_time = 0;
 static clock_time_t rtc_max_clock_ticks = 0;
+static rtimer_clock_t rtc_max_rtimer_ticks = 0;
 static volatile uint32_t overlow = 0;
 /*---------------------------------------------------------------------------*/
 static void clock_handler(nrfx_clock_evt_type_t event) { (void)event; }
@@ -93,25 +94,17 @@ static void rtc_handler(nrfx_rtc_int_type_t int_type) {
   last_isr_time = nrfx_rtc_counter_get(&rtc);
   if (int_type == SOC_RTC_TICK_CH) {
     clock_update();
-    /*
-     * We need to keep ticking while we are awake, so we schedule the next
-     * event on the next 512 tick boundary. If we drop to deep sleep before it
-     * happens, lpm_drop() will reschedule us in the 'distant' future
-     */
     next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT);
     nrfx_rtc_cc_set(&rtc, SOC_RTC_TICK_CH, next, true);
   } else if (int_type == SOC_RTC_RTIMER_CH) {
     // rtimer event
-    /* LOG_ERR("RTC rtimer"); */
     rtimer_run_next();
     /* We need to handle the compare event */
   } else if (int_type == SOC_RTC_ETIMER_CH) {
     // etimer event
     // nothing to do, because etimer is handled in clock.c
   } else if (int_type == NRFX_RTC_INT_OVERFLOW) {
-    /* We need to handle the overflow */
     overlow++;
-    /* LOG_ERR("RTC overflow"); */
   }
 }
 /*---------------------------------------------------------------------------*/
@@ -156,6 +149,7 @@ void soc_rtc_init(void) {
   rtc_config();
 
   rtc_max_clock_ticks = nrfx_rtc_max_ticks_get(&rtc) / COMPARE_INCREMENT;
+  rtc_max_rtimer_ticks = nrfx_rtc_max_ticks_get(&rtc);
   /* lets handle the overflow  */
   nrfx_rtc_overflow_enable(&rtc, true);
 
@@ -170,13 +164,11 @@ void soc_rtc_init(void) {
 }
 /*---------------------------------------------------------------------------*/
 void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks) {
-  // RTC has maximal 24 bit counter
-  if (nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)ticks, true) != NRFX_SUCCESS) {
-    LOG_ERR("RTC set compare failed");
-  }
+  nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks % rtc_max_rtimer_ticks) , true);
 }
 rtimer_clock_t soc_rtc_get_counter_value() {
-  return (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
+  // RTC is a 24 bit counter, so we need to handle the overflow
+  return (rtc_max_rtimer_ticks * overlow) +  (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
 }
 clock_time_t soc_rtc_get_clock_time() {
   return (rtc_max_clock_ticks * overlow) + (nrfx_rtc_counter_get(&rtc) / COMPARE_INCREMENT);
