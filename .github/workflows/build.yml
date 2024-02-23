@@ -7,7 +7,7 @@ name: CI
 #   * Any push (or merge) on master and develop
 on:
   push:
-    branches: [ master, develop, nrf-lowpower ]
+    branches: [ master, develop, nrf_lowpower ]
   pull_request:
     branches: [ master, develop, release-* ]
 
