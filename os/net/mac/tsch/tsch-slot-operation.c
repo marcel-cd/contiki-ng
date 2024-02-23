@@ -284,26 +284,12 @@ check_timer_miss(rtimer_clock_t ref_time, rtimer_clock_t offset, rtimer_clock_t 
 
   if(now_has_overflowed == target_has_overflowed) {
     /* Both or none have overflowed, just compare now to the target */
-    if (target <= now) {
-      TSCH_LOG_ADD(tsch_log_message,
-          snprintf(log->message, sizeof(log->message),
-              "!miss n:%d r:%d o:%d t:%d",
-                   (int)now, (int)ref_time, (int)offset, (int) target);
-      );
-    }
     return target <= now;
   } else {
     /* Either now or target of overflowed.
      * If it is now, then it has passed the target.
      * If it is target, then we haven't reached it yet.
      *  */
-    if (now_has_overflowed) {
-      TSCH_LOG_ADD(tsch_log_message,
-          snprintf(log->message, sizeof(log->message),
-              "!miss n:%d r:%d o:%d t:%d",
-                   (int)now, (int)ref_time, (int)offset, (int) target);
-      );
-    }
     return now_has_overflowed;
   }
 }
@@ -321,15 +307,10 @@ tsch_schedule_slot_operation(struct rtimer *tm, rtimer_clock_t ref_time, rtimer_
   int missed = check_timer_miss(ref_time, offset - RTIMER_GUARD, now);
 
   if(missed) {
-    /* TSCH_LOG_ADD(tsch_log_message, */
-    /*             snprintf(log->message, sizeof(log->message), */
-    /*                 "!dl-miss %s %d %d", */
-    /*                     str, (int)(now-ref_time), (int)offset); */
-    /* ); */
     TSCH_LOG_ADD(tsch_log_message,
                 snprintf(log->message, sizeof(log->message),
                     "!dl-miss %s %d %d",
-                         str, (int)now, (int)ref_time);
+                        str, (int)(now-ref_time), (int)offset);
     );
   } else {
     r = rtimer_set(tm, ref_time + offset, 1, (void (*)(struct rtimer *, void *))tsch_slot_operation, NULL);
