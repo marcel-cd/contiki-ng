@@ -729,7 +729,17 @@ read_frame(void *buf, unsigned short bufsize)
    * received 1 byte before the PHR, therefore all we need to do is subtract
    * 2 symbols (2 rtimer ticks) from the PPI FRAMESTART timestamp.
    */
+
+#ifdef NRF_LOWPOWER
+  /* PPI Radio trigger uses NRF_TIMER0 as counter, we have to convert to our RTC based RTIMER  */
+  NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+  uint64_t now = RTIMER_NOW();
+  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart)/(float)62500*RTIMER_SECOND) ;
+  timestamps.end = now - ((NRF_TIMER0->CC[0] -timestamps.end)/(float)62500*RTIMER_SECOND);
   timestamps.sfd = timestamps.framestart - BYTE_DURATION_RTIMER;
+#else
+  timestamps.sfd = timestamps.framestart - BYTE_DURATION_RTIMER;
+#endif /* NRF_LOWPOWER */
 
   LOG_DBG("Read frame: len=%d, RSSI=%d, LQI=0x%02x\n", payload_len, last_rssi,
           last_lqi);

@@ -45,6 +45,9 @@
 #include PROJECT_CONF_PATH
 #endif /* PROJECT_CONF_PATH */
 /*---------------------------------------------------------------------------*/
+/* Include CPU Group configuration */
+#include "nrf-conf.h"
+/*---------------------------------------------------------------------------*/
 #include "nrf-def.h"
 /*---------------------------------------------------------------------------*/
 /* Include Board Specific configuration */
@@ -60,9 +63,6 @@
 #else /* BOARD_CONF_PATH */
 #error "BOARD_DEF_PATH undefined"
 #endif /* BOARD_CONF_PATH */
-/*---------------------------------------------------------------------------*/
-/* Include CPU Group configuration */
-#include "nrf-conf.h"
 /*---------------------------------------------------------------------------*/
 #endif /* CONTIKI_CONF_H */
 

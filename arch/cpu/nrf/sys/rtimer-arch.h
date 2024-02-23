@@ -56,6 +56,13 @@
  *
  */
 rtimer_clock_t rtimer_arch_now(void);
+/**
+ * @brief Returns the next planed rtimer time
+ * @return The next rtimer time in ticks
+ *
+ */
+rtimer_clock_t rtimer_arch_next();
+
 /*---------------------------------------------------------------------------*/
 #endif /* RTIMER_ARCH_H_ */
 /*---------------------------------------------------------------------------*/

@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Marcel Graber <marcel@clever.design>
- * Copyright (C) 2020 Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -30,38 +29,40 @@
  */
 /*---------------------------------------------------------------------------*/
 /**
- * \addtogroup nrf
+ * \addtogroup nrf-sys
  * @{
- *
- * \addtogroup nrf-sys System drivers
- * @{
- *
- * \addtogroup nrf-clock Clock driver
- * @{
- *
- * In lowpoer mode, the RTC needs additional handling to wake up the CPU and
- * run the rtimer / etimer code. This is done in soc-rtc.c. Therefore, colck-arch.c
- * only needs to handle the software clock.
  *
  * \file
- *         Software clock implementation for the nRF.
- *
- * \author
- *         Marcel Graber <marcel@clever.design> (lowpower mode)
- *         Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
- *
+ * Implementation of the NRF RTC driver
  */
 /*---------------------------------------------------------------------------*/
+#include "clock.h"
 #include "contiki.h"
 
-#include "nrfx_config.h"
-#include "nrfx_rtc.h"
+#ifdef NRF_LOWPOWER
+#include "etimer.h"
+#include "lpm.h"
+#include "rtimer.h"
+
 #include "nrfx_clock.h"
+#include "nrfx_rtc.h"
 #include "soc-rtc.h"
 
-#if CLOCK_SIZE != 4
-/* 64 bit variables may not be read atomically without extra handling */
-#error CLOCK_CONF_SIZE must be 4 (32 bit)
+#include <stdbool.h>
+#include <stdint.h>
+#include "sys/log.h"
+#define LOG_MODULE "RTC"
+#define LOG_LEVEL LOG_LEVEL_INFO
+
+/*---------------------------------------------------------------------------*/
+/* Prototype of a function in clock.c. Called every time the handler fires */
+void clock_update(void);
+
+/*---------------------------------------------------------------------------*/
+#define COMPARE_INCREMENT (RTIMER_SECOND / CLOCK_SECOND)
+/*---------------------------------------------------------------------------*/
+#if CLOCK_SIZE != 8
+#error CLOCK_CONF_SIZE must be 8 (64 bit)
 #endif
 
 #ifdef NRF_CLOCK_CONF_RTC_INSTANCE
@@ -70,89 +71,57 @@
 #define NRF_CLOCK_RTC_INSTANCE 0
 #endif
 
-#ifdef NRF_LOWPOWER
-/*---------------------------------------------------------------------------*/
-void
-clock_update(void)
-{
-  if(etimer_pending() && !CLOCK_LT(clock_time(), etimer_next_expiration_time())) {
-    etimer_request_poll();
-  }
-}
-void
-clock_init(void)
-{}
-/*---------------------------------------------------------------------------*/
-clock_time_t
-clock_time(void)
-{
-  return soc_rtc_get_clock_time();
-}
-/*---------------------------------------------------------------------------*/
-unsigned long clock_seconds(void) {
-  return (unsigned long)(clock_time() / CLOCK_SECOND);
-}
-/*---------------------------------------------------------------------------*/
-void
-clock_wait(clock_time_t i)
-{
-  clock_time_t start = clock_time();
-  while(clock_time() - start < i) {
-    __WFE();
-  }
-}
-/*---------------------------------------------------------------------------*/
-void
-clock_delay_usec(uint16_t dt)
-{
-  NRFX_DELAY_US(dt);
-}
-/*---------------------------------------------------------------------------*/
-/**
- * @brief Obsolete delay function but we implement it here since some code
- * still uses it
- */
-void
-clock_delay(unsigned int i)
-{
-  clock_delay_usec(i);
-}
-#else
-static void clock_update(void);
-
+/* Prototype of a function in clock.c. Called every time the handler fires */
+void clock_update(void);
 /*---------------------------------------------------------------------------*/
 /**< RTC instance used for platform clock */
 static const nrfx_rtc_t rtc = NRFX_RTC_INSTANCE(NRF_CLOCK_RTC_INSTANCE);
 /*---------------------------------------------------------------------------*/
-static volatile clock_time_t ticks;
+static rtimer_clock_t last_isr_time = 0;
+static clock_time_t rtc_max_clock_ticks = 0;
+static volatile uint32_t overlow = 0;
 /*---------------------------------------------------------------------------*/
-static void
-clock_handler(nrfx_clock_evt_type_t event)
-{
-  (void) event;
-}
+static void clock_handler(nrfx_clock_evt_type_t event) { (void)event; }
 /*---------------------------------------------------------------------------*/
 /**
  * @brief Function for handling the RTC<instance> interrupts
  * @param int_type Type of interrupt to be handled
  */
-static void
-rtc_handler(nrfx_rtc_int_type_t int_type)
-{
-  if(int_type == NRFX_RTC_INT_TICK) {
+static void rtc_handler(nrfx_rtc_int_type_t int_type) {
+  /* static bool first = true; */
+  uint32_t next;
+  last_isr_time = nrfx_rtc_counter_get(&rtc);
+  if (int_type == SOC_RTC_TICK_CH) {
     clock_update();
+    /*
+     * We need to keep ticking while we are awake, so we schedule the next
+     * event on the next 512 tick boundary. If we drop to deep sleep before it
+     * happens, lpm_drop() will reschedule us in the 'distant' future
+     */
+    next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT);
+    nrfx_rtc_cc_set(&rtc, SOC_RTC_TICK_CH, next, true);
+  } else if (int_type == SOC_RTC_RTIMER_CH) {
+    // rtimer event
+    /* LOG_ERR("RTC rtimer"); */
+    rtimer_run_next();
+    /* We need to handle the compare event */
+  } else if (int_type == SOC_RTC_ETIMER_CH) {
+    // etimer event
+    // nothing to do, because etimer is handled in clock.c
+  } else if (int_type == NRFX_RTC_INT_OVERFLOW) {
+    /* We need to handle the overflow */
+    overlow++;
+    /* LOG_ERR("RTC overflow"); */
   }
 }
 /*---------------------------------------------------------------------------*/
 /**
  * @brief Function starting the internal LFCLK XTAL oscillator.
  */
-static void
-lfclk_config(void)
-{
+static void lfclk_config(void) {
   nrfx_err_t err_code = nrfx_clock_init(clock_handler);
 
-  if(err_code != NRFX_SUCCESS) {
+  if (err_code != NRFX_SUCCESS) {
     return;
   }
 
@@ -164,88 +133,56 @@ lfclk_config(void)
 /**
  * @brief Function initialization and configuration of RTC driver instance.
  */
-static void
-rtc_config(void)
-{
+static void rtc_config(void) {
   nrfx_err_t err_code;
 
   /*Initialize RTC instance */
   nrfx_rtc_config_t config = NRFX_RTC_DEFAULT_CONFIG;
-  config.prescaler = 255;
+  config.prescaler = RTC_FREQ_TO_PRESCALER(32768); // full speed...
   config.interrupt_priority = 6;
   config.reliable = 0;
 
   err_code = nrfx_rtc_init(&rtc, &config, rtc_handler);
 
-  if(err_code != NRFX_SUCCESS) {
+  if (err_code != NRFX_SUCCESS) {
     return;
   }
+}
+/*---------------------------------------------------------------------------*/
+void soc_rtc_init(void) {
+  uint32_t next;
 
-  /*Enable tick event & interrupt */
-  nrfx_rtc_tick_enable(&rtc, true);
+  lfclk_config();
+  rtc_config();
+
+  rtc_max_clock_ticks = nrfx_rtc_max_ticks_get(&rtc) / COMPARE_INCREMENT;
+  /* lets handle the overflow  */
+  nrfx_rtc_overflow_enable(&rtc, true);
+
+  /* Tick not used */
+  nrfx_rtc_tick_disable(&rtc);
 
   /*Power on RTC instance */
   nrfx_rtc_enable(&rtc);
+
+  next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT);
+  nrfx_rtc_cc_set(&rtc, SOC_RTC_TICK_CH, next, true);
 }
 /*---------------------------------------------------------------------------*/
-void
-clock_init(void)
-{
-  ticks = 0;
-  lfclk_config();
-  rtc_config();
-}
-/*---------------------------------------------------------------------------*/
-clock_time_t
-clock_time(void)
-{
-  return ticks;
-}
-/*---------------------------------------------------------------------------*/
-static void
-clock_update(void)
-{
-  ticks++;
-  if(etimer_pending() && !CLOCK_LT(ticks, etimer_next_expiration_time())) {
-    etimer_request_poll();
+void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks) {
+  // RTC has maximal 24 bit counter
+  if (nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)ticks, true) != NRFX_SUCCESS) {
+    LOG_ERR("RTC set compare failed");
   }
 }
-/*---------------------------------------------------------------------------*/
-unsigned long
-clock_seconds(void)
-{
-  return (unsigned long)(ticks / CLOCK_SECOND);
+rtimer_clock_t soc_rtc_get_counter_value() {
+  return (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
+}
+clock_time_t soc_rtc_get_clock_time() {
+  return (rtc_max_clock_ticks * overlow) + (nrfx_rtc_counter_get(&rtc) / COMPARE_INCREMENT);
 }
 /*---------------------------------------------------------------------------*/
-void
-clock_wait(clock_time_t i)
-{
-  clock_time_t start = clock_time();
-  while(clock_time() - start < i) {
-    __WFE();
-  }
-}
-/*---------------------------------------------------------------------------*/
-void
-clock_delay_usec(uint16_t dt)
-{
-  NRFX_DELAY_US(dt);
-}
-/*---------------------------------------------------------------------------*/
-/**
- * @brief Obsolete delay function but we implement it here since some code
- * still uses it
- */
-void
-clock_delay(unsigned int i)
-{
-  clock_delay_usec(i);
-}
+rtimer_clock_t soc_rtc_last_isr_time(void) { return last_isr_time; }
 /*---------------------------------------------------------------------------*/
 #endif /* NRF_LOWPOWER */
-
-/**
- * @}
- * @}
- * @}
- */
+/** @} */

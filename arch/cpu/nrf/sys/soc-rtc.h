@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
+ * Copyright (C) 2024 Marcel Graber <marcel@clever.design>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -32,40 +32,71 @@
  * \addtogroup nrf
  * @{
  *
+ * \addtogroup nrf-sys System drivers
+ * @{
+ *
+ * \addtogroup nrf-clock Clock driver
+ * @{
+ *
+ * For LowPower setup, we use RTC instead of TIMER as the basis for all clocks and
+ * timers
+ *
+ * We use two RTC channels. Channel 0 is used by the rtimer sub-system. Channel 1 is used by the system clock and the LPM module.
+ *
+ * The RTC runs in all power modes except 'shutdown'
+ *
  * \file
- *      Header with configuration defines common to all nrf platforms
+ *         Header file for the nRF rtimer (LowPower) driver
  * \author
- *      Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
+ *         Marcel Graber <marcel@clever.design>
+ *
  */
+#ifndef SOC_RTC_H_
+#define SOC_RTC_H_
 /*---------------------------------------------------------------------------*/
-#ifndef NRF_CONF_H_
-#define NRF_CONF_H_
+#include "contiki.h"
+#include "rtimer.h"
+
+#include <stdint.h>
+#include "nrfx_rtc.h"
+
+#define SOC_RTC_TICK_CH NRFX_RTC_INT_COMPARE0
+#define SOC_RTC_RTIMER_CH NRFX_RTC_INT_COMPARE1
+#define SOC_RTC_ETIMER_CH NRFX_RTC_INT_COMPARE2
+
 /*---------------------------------------------------------------------------*/
-/* Include CPU Specific conf */
-#ifdef CPU_CONF_PATH
-#include CPU_CONF_PATH
-#else
-#error "CPU_CONF_PATH undefined"
-#endif /* BOARD_CONF_PATH */
+/**
+ * \brief Initialise the RTC module
+ *
+ * This timer configures RTC channels.
+ *
+ * This function must be called before clock_init() and rtimer_init()
+ */
+void soc_rtc_init(void);
+
+
+/**
+ * \brief Schedule an RTC channel 0 one-shot compare event
+ * \param channel RTC_CH0 or RTC_CH1
+ * \param t The time when the event will be fired. This is an absolute
+ *          time, in other words the event will fire AT time \e t,
+ *          not IN \e t ticks
+ *
+ * Channel RTC_CH0 is reserved for the rtimer. RTC_CH1 is reserved
+ * for the system clock.
+ *
+ * User applications should not use this function. User applications should
+ * instead use Contiki's timer-related libraries
+ */
+void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t t);
+rtimer_clock_t soc_rtc_get_counter_value(void);
+clock_time_t soc_rtc_get_clock_time(void);
+rtimer_clock_t soc_rtc_last_isr_time(void);
 /*---------------------------------------------------------------------------*/
-#ifndef NETSTACK_CONF_RADIO
-#define NETSTACK_CONF_RADIO        nrf_ieee_driver
-#endif /* NETSTACK_CONF_RADIO */
+#endif /* SOC_RTC_H_ */
 /*---------------------------------------------------------------------------*/
-#ifdef NRF_CONF_HARDFAULT_HANDLER_EXTENDED
-#define NRF_HARDFAULT_HANDLER_EXTENDED NRF_CONF_HARDFAULT_HANDLER_EXTENDED
-#else /* NRF_CONF_HARDFAULT_HANDLER_EXTENDED */
-#define NRF_HARDFAULT_HANDLER_EXTENDED 0
-#endif /* NRF_CONF_HARDFAULT_HANDLER_EXTENDED */
-/*---------------------------------------------------------------------------*/
-#ifdef NRF_CONF_LOWPOWER
-#define NRF_LOWPOWER NRF_CONF_LOWPOWER
-#else /* NRF_CONF_LOWPOWER */
-#define NRF_LOWPOWER 0
-#endif /* NRF_CONF_LOWPOWER */
-/*---------------------------------------------------------------------------*/
-#endif /* NRF_CONF_H_ */
-/*---------------------------------------------------------------------------*/
-/** 
- * @} 
+/**
+ * @}
+ * @}
+ * @}
  */

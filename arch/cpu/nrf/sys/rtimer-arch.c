@@ -69,20 +69,76 @@
 #error Unsupported timer for rtimer
 #endif
 
+#ifdef NRF_LOWPOWER
+#include "soc-rtc.h"
+/*---------------------------------------------------------------------------*/
+static volatile rtimer_clock_t next_trigger = 0;
+/*---------------------------------------------------------------------------*/
+#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 void
 rtimer_arch_init(void)
 {
-  nrf_timer_event_clear(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0);
 
+  /* RTC is needed for NRF_LOWPOWER Mode */
+  soc_rtc_init();
+
+  nrf_timer_event_clear(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0);
   nrf_timer_frequency_set(NRF_RTIMER_TIMER, NRF_TIMER_FREQ_62500Hz);
   nrf_timer_bit_width_set(NRF_RTIMER_TIMER, NRF_TIMER_BIT_WIDTH_32);
   nrf_timer_mode_set(NRF_RTIMER_TIMER, NRF_TIMER_MODE_TIMER);
   nrf_timer_int_enable(NRF_RTIMER_TIMER, NRF_TIMER_INT_COMPARE0_MASK);
+  /* in lowpower mode, we use the RTC to trigger the next rtimer */
+#ifdef NRF_LOWPOWER
+#else
   NVIC_ClearPendingIRQ(NRF_RTIMER_IRQn);
   NVIC_EnableIRQ(NRF_RTIMER_IRQn);
+#endif
   nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_START);
 }
+
+#ifdef NRF_LOWPOWER
+/*---------------------------------------------------------------------------*/
+ /**
+ *
+ * This function schedules a one-shot event with the AON RTC.
+ *
+ * This functions converts \e to a value suitable for the AON RTC.
+ */
+void
+rtimer_arch_schedule(rtimer_clock_t t)
+{
+  /* Convert the rtimer tick value to a value suitable for the AON RTC */
+  soc_rtc_schedule_one_shot(SOC_RTC_RTIMER_CH, (clock_time_t)t);
+  next_trigger = t;
+}
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Returns the current real-time clock time
+ * \return The current rtimer time in ticks
+ *
+ * The value is read from the AON RTC counter and converted to a number of
+ * rtimer ticks
+ *
+ */
+rtimer_clock_t rtimer_arch_now() {
+  return soc_rtc_get_counter_value();
+}
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief Returns the next rtimer time
+ * \return The next rtimer time in ticks or 0 if no event is scheduled
+ *
+ *
+ */
+rtimer_clock_t
+rtimer_arch_next()
+{
+  return RTIMER_CLOCK_LT(RTIMER_NOW(), (next_trigger)) ? next_trigger : 0;
+}
+/*---------------------------------------------------------------------------*/
+
+#else
 /*---------------------------------------------------------------------------*/
 void
 rtimer_arch_schedule(rtimer_clock_t t)
@@ -108,6 +164,7 @@ NRF_RTIMER_IRQHandler(void)
     rtimer_run_next();
   }
 }
+#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 /**
  * @}
