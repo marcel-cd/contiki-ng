@@ -76,7 +76,7 @@ void soc_rtc_init(void);
 
 
 /**
- * \brief Schedule an RTC channel 0 one-shot compare event
+ * \brief Schedule an RTC one-shot compare event
  * \param channel RTC_CH0 or RTC_CH1
  * \param t The time when the event will be fired. This is an absolute
  *          time, in other words the event will fire AT time \e t,
@@ -89,8 +89,28 @@ void soc_rtc_init(void);
  * instead use Contiki's timer-related libraries
  */
 void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t t);
+
+
+/**
+ * \brief Getting th ticks of the RTIMER since startup
+ * \return The actual ticks of the clock
+ *
+ * The rtimer ticks per seconds are defined in the macro RTIMER_SECOND
+ */
 rtimer_clock_t soc_rtc_get_counter_value(void);
+
+/**
+ * \brief Getting th ticks of the CLOCK since startup
+ * \return The actual ticks of the clock
+ *
+ * The clock ticks per seccons are defined in the macro CLOCK_SECOND
+ */
 clock_time_t soc_rtc_get_clock_time(void);
+
+/**
+ * \brief Helper Function in lpm.c to calculate the next wakeup time
+ * \return The last time the RTC interrupt was fired
+ */
 rtimer_clock_t soc_rtc_last_isr_time(void);
 /*---------------------------------------------------------------------------*/
 #endif /* SOC_RTC_H_ */

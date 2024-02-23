@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
+ * Copyright (C) 2024 Marcel Graber <marcel@clever.design>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -33,32 +33,23 @@
  * @{
  *
  * \file
- *      Header with configuration defines common to all nrf platforms
+ *      Header with configuration defines common low power mode
+ *      to all nrf platforms. this file has to be included before
+ *      nrf-def.h
  * \author
- *      Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
+ *      Marcel Graber <marcel@clever.design>
  */
 /*---------------------------------------------------------------------------*/
-#ifndef NRF_CONF_H_
-#define NRF_CONF_H_
+#ifndef NRF_LOWPOWER_CONF_H_
+#define NRF_LOWPOWER_CONF_H_
 /*---------------------------------------------------------------------------*/
-/* Include CPU Specific conf */
-#ifdef CPU_CONF_PATH
-#include CPU_CONF_PATH
-#else
-#error "CPU_CONF_PATH undefined"
-#endif /* BOARD_CONF_PATH */
+#ifdef NRF_CONF_LOWPOWER
+#define NRF_LOWPOWER NRF_CONF_LOWPOWER
+#else /* NRF_CONF_LOWPOWER */
+#define NRF_LOWPOWER 0
+#endif /* NRF_CONF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
-#ifndef NETSTACK_CONF_RADIO
-#define NETSTACK_CONF_RADIO        nrf_ieee_driver
-#endif /* NETSTACK_CONF_RADIO */
-/*---------------------------------------------------------------------------*/
-#ifdef NRF_CONF_HARDFAULT_HANDLER_EXTENDED
-#define NRF_HARDFAULT_HANDLER_EXTENDED NRF_CONF_HARDFAULT_HANDLER_EXTENDED
-#else /* NRF_CONF_HARDFAULT_HANDLER_EXTENDED */
-#define NRF_HARDFAULT_HANDLER_EXTENDED 0
-#endif /* NRF_CONF_HARDFAULT_HANDLER_EXTENDED */
-/*---------------------------------------------------------------------------*/
-#endif /* NRF_CONF_H_ */
+#endif /* NRF_LOWPOWER_CONF_H_ */
 /*---------------------------------------------------------------------------*/
 /** 
  * @} 
