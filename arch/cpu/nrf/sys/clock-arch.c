@@ -70,7 +70,7 @@
 #define NRF_CLOCK_RTC_INSTANCE 0
 #endif
 
-#ifdef NRF_LOWPOWER
+#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 void
 clock_update(void)

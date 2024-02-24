@@ -39,14 +39,15 @@
 #include "clock.h"
 #include "contiki.h"
 
-#ifdef NRF_LOWPOWER
+#include "soc-rtc.h"
+
+#if NRF_LOWPOWER
 #include "etimer.h"
 #include "lpm.h"
 #include "rtimer.h"
 
 #include "nrfx_clock.h"
 #include "nrfx_rtc.h"
-#include "soc-rtc.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -207,13 +208,12 @@ soc_rtc_last_isr_time(void)
 /*---------------------------------------------------------------------------*/
 #else
 void
-sod_rtc_init(void)
+soc_rtc_init(void)
 {
 }
 void
 soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time)
 {
-  return 0;
 }
 rtimer_clock_t
 soc_rtc_get_rtimer_ticks(void)

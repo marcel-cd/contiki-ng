@@ -79,7 +79,7 @@
 #define RADIO_DELAY_BEFORE_RX         ((unsigned)US_TO_RTIMERTICKS(250))
 #define RADIO_DELAY_BEFORE_DETECT     0
 /*---------------------------------------------------------------------------*/
-#ifdef NRF_LOWPOWER
+#if NRF_LOWPOWER
 /* 32.768 kHz clock */
 #define RTIMER_ARCH_SECOND 32768
 #else

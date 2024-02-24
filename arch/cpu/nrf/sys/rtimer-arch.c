@@ -48,6 +48,8 @@
 /*---------------------------------------------------------------------------*/
 #include "contiki.h"
 
+#include "soc-rtc.h"
+
 #include "nrf.h"
 #include "hal/nrf_timer.h"
 
@@ -69,8 +71,7 @@
 #error Unsupported timer for rtimer
 #endif
 
-#ifdef NRF_LOWPOWER
-#include "soc-rtc.h"
+#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 static volatile rtimer_clock_t next_trigger = 0;
 /*---------------------------------------------------------------------------*/
@@ -87,7 +88,7 @@ rtimer_arch_init(void)
   nrf_timer_bit_width_set(NRF_RTIMER_TIMER, NRF_TIMER_BIT_WIDTH_32);
   nrf_timer_mode_set(NRF_RTIMER_TIMER, NRF_TIMER_MODE_TIMER);
   nrf_timer_int_enable(NRF_RTIMER_TIMER, NRF_TIMER_INT_COMPARE0_MASK);
-#ifdef NRF_LOWPOWER
+#if NRF_LOWPOWER
   /* in lowpower mode, we use the RTC for rtimer */
 #else
   NVIC_ClearPendingIRQ(NRF_RTIMER_IRQn);
@@ -95,7 +96,7 @@ rtimer_arch_init(void)
 #endif
   nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_START);
 }
-#ifdef NRF_LOWPOWER
+#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 /**
  *

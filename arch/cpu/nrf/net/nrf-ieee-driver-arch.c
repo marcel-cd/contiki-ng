@@ -728,7 +728,7 @@ read_frame(void *buf, unsigned short bufsize)
    * 2 symbols (2 rtimer ticks) from the PPI FRAMESTART timestamp.
    */
 
-#ifdef NRF_LOWPOWER
+#if NRF_LOWPOWER
   /* PPI Radio trigger uses NRF_TIMER0 as counter, we have to convert to our RTC based RTIMER  */
   NRF_TIMER0->TASKS_CAPTURE[0] = 1;
   uint64_t now = RTIMER_NOW();

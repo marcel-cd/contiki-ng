@@ -273,13 +273,13 @@ deep_sleep(void)
   wake_up();
 }
 /*---------------------------------------------------------------------------*/
+#if NRF_LOWPOWER
 void
 lpm_drop()
 {
   uint8_t max_pm;
-
-  /* Critical. Don't get interrupted! */
-  /* ti_lib_int_master_disable(); */
+  int_master_status_t status;
+  status = critical_enter();
 
   max_pm = setup_sleep_mode();
 
@@ -289,9 +289,24 @@ lpm_drop()
   } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
     deep_sleep();
   }
-
-  /* ti_lib_int_master_enable(); */
+  critical_exit(status);
 }
+#else
+void
+lpm_drop()
+{
+  int_master_status_t status;
+  int abort;
+  status = critical_enter();
+  abort = process_nevents();
+  if(!abort) {
+    ENERGEST_SWITCH(ENERGEST_TYPE_CPU, ENERGEST_TYPE_LPM);
+    __WFI();
+    ENERGEST_SWITCH(ENERGEST_TYPE_LPM, ENERGEST_TYPE_CPU);
+  }
+  critical_exit(status);
+}
+#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 /** @} */
 /** @} */
