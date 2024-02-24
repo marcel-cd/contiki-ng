@@ -49,6 +49,7 @@
 /*---------------------------------------------------------------------------*/
 #include "contiki.h"
 #include "dev/radio.h"
+#include "nrfx_clock.h"
 #include "sys/energest.h"
 #include "sys/int-master.h"
 #include "sys/critical.h"
@@ -562,10 +563,7 @@ init(void)
   timestamps.phr = 0;
 
   /* Request the HF clock */
-  nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED);
-  nrf_clock_task_trigger(NRF_CLOCK, NRF_CLOCK_TASK_HFCLKSTART);
-  while(!nrf_clock_event_check(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED));
-  nrf_clock_event_clear(NRF_CLOCK, NRF_CLOCK_EVENT_HFCLKSTARTED);
+  nrfx_clock_hfclk_start();
 
   /* Start the RF driver process */
   process_start(&nrf_ieee_rf_process, NULL);

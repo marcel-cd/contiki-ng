@@ -86,7 +86,7 @@ clock_init(void)
 clock_time_t
 clock_time(void)
 {
-  return soc_rtc_get_clock_time();
+  return soc_rtc_get_clock_ticks();
 }
 /*---------------------------------------------------------------------------*/
 unsigned long clock_seconds(void) {

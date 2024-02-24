@@ -51,6 +51,7 @@
 /*---------------------------------------------------------------------------*/
 #include "lpm.h"
 #include "contiki.h"
+#include "nrf-def.h"
 #include "rtimer-arch.h"
 #include "soc-rtc.h"
 #include "sys/energest.h"
@@ -71,10 +72,11 @@
  * Don't consider standby mode if the next AON RTC event is scheduled to fire
  * in less than STANDBY_MIN_DURATION rtimer ticks
  */
-#define STANDBY_MIN_DURATION  (RTIMER_SECOND / 100) /* 10.0 ms */
+#define STANDBY_MIN_DURATION  US_TO_RTIMERTICKS(10000) /* 10.0 ms */
 
 /* Wake up this much time earlier before the next rtimer */
-#define SLEEP_GUARD_TIME      (RTIMER_SECOND / 1000) /* 1.0 ms */
+/* needed for HFXO power-up and debonce time             */
+#define SLEEP_GUARD_TIME      US_TO_RTIMERTICKS(1500) /* 1.5 ms */
 
 /* Maximum allowed sleep-time, must be shorter than watchdog timeout */
 #define MAX_SLEEP_TIME        RTIMER_SECOND
@@ -101,16 +103,13 @@ wake_up(void)
 
   ENERGEST_SWITCH(ENERGEST_TYPE_DEEP_LPM, ENERGEST_TYPE_CPU);
 
-  /*
-   * We may or may not have been woken up by an AON RTC tick. If not, we need
-   * to adjust our software tick counter
-   */
-  /* clock_update(); */
 
   watchdog_periodic();
 
   /*
-   * Trigger a switch to the XOSC, so that we can subsequently use the RF FS
+   * In LowPower Mode, HFCLK is used by the IEEE 802.15.4 radio.
+   * and NRF_TIMER0 is used in the nrf-ieee-driver-arch.c
+   * In non-LowPower Mode, HFCLK is also used for the RTIMER
    */
   nrfx_clock_hfclk_start();
   nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_START);
@@ -192,33 +191,36 @@ setup_sleep_mode(void)
     max_pm = pm;
   }
 
-  if(max_pm == LPM_MODE_SLEEP) {
+  if (max_pm == LPM_MODE_SLEEP) {
+    /* In sleep mode, HFXO is powered up, therefore we do  not have
+     * to wakeup earlier to powering up the HFXO */
     if(next_etimer_set) {
       /* Schedule the next system wakeup due to etimer */
       if(RTIMER_CLOCK_LT(next_etimer, now + MIN_SAFE_SCHEDULE)) {
         /* Too soon in future, use this minimal interval instead */
-        next_etimer = now + MIN_SAFE_SCHEDULE;
+        /* next_etimer = now + MIN_SAFE_SCHEDULE; */
       } else if(RTIMER_CLOCK_LT(now + MAX_SLEEP_TIME, next_etimer)) {
         /* Too far in future, use MAX_SLEEP_TIME instead */
-        next_etimer = now + MAX_SLEEP_TIME;
+        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now + MAX_SLEEP_TIME);
+      } else {
+        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_etimer);
       }
-      /* soc_rtc_schedule_one_shot(SOC_RTC_ETIMER_CH, next_etimer); */
     } else {
       /* No etimers set. Since by default the CH1 RTC fires once every clock tick,
        * need to explicitly schedule a wakeup in the future to save energy.
        * But do not stay in this mode for too long, otherwise watchdog will be trigerred. */
-      /* soc_rtc_schedule_one_shot(SOC_RTC_ETIMER_CH, now + MAX_SLEEP_TIME); */
+      soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now + MAX_SLEEP_TIME);
     }
 
-  } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
+  } else if (max_pm == LPM_MODE_DEEP_SLEEP) {
     /* Watchdog is not enabled, so deep sleep can continue an arbitrary long time.
-     * On the other hand, if `CC2650_FAST_RADIO_STARTUP` is defined,
+     * On the other hand, when we have to start again the system, it takes a while
+     * till the HFXO is stable and the system is ready to run. Therefore, we have
      * early wakeup before the next rtimer should be scheduled. */
-
     if(next_rtimer_set) {
       if(!next_etimer_set || RTIMER_CLOCK_LT(next_rtimer - SLEEP_GUARD_TIME, next_etimer)) {
         /* schedule a wakeup briefly before the next rtimer to wake up the system */
-        /* soc_rtc_schedule_one_shot(SOC_RTC_RTIMER_CH, next_rtimer - SLEEP_GUARD_TIME); */
+        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_rtimer - SLEEP_GUARD_TIME);
       }
     }
 
@@ -226,10 +228,10 @@ setup_sleep_mode(void)
       /* Schedule the next system wakeup due to etimer.
        * No need to compare the `next_etimer` to `now` here as this branch
        * is only entered when there's sufficient time for deep sleeping. */
-      /* soc_rtc_schedule_one_shot(SOC_RTC_ETIMER_CH, next_etimer); */
+      /* soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_etimer); */
     } else {
       /* Use the farthest possible wakeup time */
-      /* soc_rtc_schedule_one_shot(SOC_RTC_ETIMER_CH, now - 1); */
+      /* soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now - 1); */
     }
   }
 
@@ -256,22 +258,11 @@ deep_sleep(void)
   /* Pat the dog: We don't want it to shout right after we wake up */
   watchdog_periodic();
 
-  /*
-   * Before entering Deep Sleep, we must switch off the HF XOSC. The HF XOSC
-   * is predominantly controlled by the RF driver. In a build with radio
-   * cycling (e.g. ContikiMAC), the RF driver will request the XOSC before
-   * using the Freq. Synth, and switch back to the RC when it is about to
-   * turn back off.
-   *
-   * If the radio is on, we won't even reach here, and if it's off the HF
-   * clock source should already be the HF RC, unless CC2650_FAST_RADIO_STARTUP
-   * is defined.
-   *
-   * Nevertheless, request the switch to the HF RC explicitly here.
+  /* In LowPower Mode, HFCLK is used by the IEEE 802.15.4 radio.
+   * and NRF_TIMER0 in nrf-ieee-driver-arch.c
    */
   nrfx_clock_hfclk_stop();
-  nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_STOP);
-
+  nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_SHUTDOWN);
   ENERGEST_SWITCH(ENERGEST_TYPE_CPU, ENERGEST_TYPE_DEEP_LPM);
 
   /* Deep Sleep */

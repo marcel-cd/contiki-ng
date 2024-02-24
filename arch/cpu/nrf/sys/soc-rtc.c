@@ -60,9 +60,13 @@ void clock_update(void);
 
 /*---------------------------------------------------------------------------*/
 #define COMPARE_INCREMENT (RTIMER_SECOND / CLOCK_SECOND)
+#define MULTIPLE_256_MASK 0xFFFFFF00
 /*---------------------------------------------------------------------------*/
 #if CLOCK_SIZE != 8
 #error CLOCK_CONF_SIZE must be 8 (64 bit)
+#endif
+#if RTIMER_SECOND != 32768
+#error RIMTER_SECOND must be 32768 when using the NRF_RTC
 #endif
 
 #ifdef NRF_CLOCK_CONF_RTC_INSTANCE
@@ -89,20 +93,16 @@ static void clock_handler(nrfx_clock_evt_type_t event) { (void)event; }
  * @param int_type Type of interrupt to be handled
  */
 static void rtc_handler(nrfx_rtc_int_type_t int_type) {
-  /* static bool first = true; */
   uint32_t next;
   last_isr_time = nrfx_rtc_counter_get(&rtc);
-  if (int_type == SOC_RTC_TICK_CH) {
+  if (int_type == SOC_RTC_SYSTEM_CH) {
     clock_update();
-    next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT);
-    nrfx_rtc_cc_set(&rtc, SOC_RTC_TICK_CH, next, true);
+    next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT) & MULTIPLE_256_MASK;
+    nrfx_rtc_cc_set(&rtc, SOC_RTC_SYSTEM_CH, next, true);
   } else if (int_type == SOC_RTC_RTIMER_CH) {
     // rtimer event
     rtimer_run_next();
     /* We need to handle the compare event */
-  } else if (int_type == SOC_RTC_ETIMER_CH) {
-    // etimer event
-    // nothing to do, because etimer is handled in clock.c
   } else if (int_type == NRFX_RTC_INT_OVERFLOW) {
     overlow++;
   }
@@ -159,22 +159,35 @@ void soc_rtc_init(void) {
   /*Power on RTC instance */
   nrfx_rtc_enable(&rtc);
 
-  next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT);
-  nrfx_rtc_cc_set(&rtc, SOC_RTC_TICK_CH, next, true);
+  next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT) & MULTIPLE_256_MASK;
+  nrfx_rtc_cc_set(&rtc, SOC_RTC_SYSTEM_CH, next, true);
 }
 /*---------------------------------------------------------------------------*/
 void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks) {
-  nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks % rtc_max_rtimer_ticks) , true);
+  // keep WAKEUP on SystemChannel only every CLOCK_SECOND TICK
+  if (channel == SOC_RTC_SYSTEM_CH) {
+    nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks & MULTIPLE_256_MASK) , true);
+  } else {
+    nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks % rtc_max_rtimer_ticks),
+                    true);
+  }
 }
-rtimer_clock_t soc_rtc_get_counter_value() {
+rtimer_clock_t soc_rtc_get_rtimer_ticks() {
   // RTC is a 24 bit counter, so we need to handle the overflow
+  /* return (rtc_max_rtimer_ticks * 0) +  (rtimer_clock_t)nrfx_rtc_counter_get(&rtc); */
   return (rtc_max_rtimer_ticks * overlow) +  (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
 }
-clock_time_t soc_rtc_get_clock_time() {
+clock_time_t soc_rtc_get_clock_ticks() {
   return (rtc_max_clock_ticks * overlow) + (nrfx_rtc_counter_get(&rtc) / COMPARE_INCREMENT);
 }
 /*---------------------------------------------------------------------------*/
 rtimer_clock_t soc_rtc_last_isr_time(void) { return last_isr_time; }
 /*---------------------------------------------------------------------------*/
+#else
+void sod_rtc_init(void) {};
+void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time) { return 0; }
+rtimer_clock_t soc_rtc_get_rtimer_ticks(void) { return 0; }
+clock_time_t soc_rtc_get_clock_ticks(void) { return 0; }
+rtimer_clock_t soc_rtc_last_isr_time(void) { return 0; }
 #endif /* NRF_LOWPOWER */
 /** @} */

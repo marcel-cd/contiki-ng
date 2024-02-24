@@ -51,37 +51,12 @@
 #define LPM_MODE_AWAKE         0
 #define LPM_MODE_SLEEP         1
 #define LPM_MODE_DEEP_SLEEP    2
-#define LPM_MODE_SHUTDOWN      3
 
 #ifndef LPM_MODE_MAX_SUPPORTED_CONF
 #define LPM_MODE_MAX_SUPPORTED LPM_MODE_DEEP_SLEEP
 #else
 #define LPM_MODE_MAX_SUPPORTED LPM_MODE_MAX_SUPPORTED_CONF
 #endif
-/*---------------------------------------------------------------------------*/
-/**
- * \brief Declare a variable to be used in order to get notifications from LPM
- * \param n the variable name to be declared
- * \param m A pointer to a function which will tell the LPM module the max
- *          PM this module is willing to handle. This function will return
- *          LPM_MODE_SLEEP, LPM_MODE_DEEP_SLEEP etc. The LPM module will ask all
- *          registered modules and will trigger the highest LPM permitted
- * \param s A pointer to a function which will receive a notification just
- *          before entering the low power mode. The callee can prepare for the
- *          imminent LPM state. The argument to this function will be the
- *          upcoming low power mode. This function can e.g. turn off a
- *          peripheral before the LPM module shuts down the power domain.
- * \param w A pointer to a function which will be called just after we have
- *          woken up. This can be used to e.g. turn a peripheral back on. This
- *          function is in charge of turning power domains back on. This
- *          function will normally be called within an interrupt context.
- * \param l Power domain locks, if any are required. The module can request
- *          that the SERIAL or PERIPH PD be kept powered up at the transition
- *          to deep sleep. This field can be a bitwise OR of LPM_DOMAIN_x, so
- *          if required multiple domains can be kept powered.
- */
-#define LPM_MODULE(n, m, s, w, l) static lpm_registered_module_t n = \
-  { NULL, m, s, w, l }
 /*---------------------------------------------------------------------------*/
 /**
  * \brief Drop the cortex to sleep / deep sleep and shut down peripherals

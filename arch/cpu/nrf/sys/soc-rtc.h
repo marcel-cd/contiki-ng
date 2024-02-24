@@ -35,9 +35,6 @@
  * \addtogroup nrf-sys System drivers
  * @{
  *
- * \addtogroup nrf-clock Clock driver
- * @{
- *
  * For LowPower setup, we use RTC instead of TIMER as the basis for all clocks and
  * timers
  *
@@ -60,9 +57,8 @@
 #include <stdint.h>
 #include "nrfx_rtc.h"
 
-#define SOC_RTC_TICK_CH NRFX_RTC_INT_COMPARE0
+#define SOC_RTC_SYSTEM_CH NRFX_RTC_INT_COMPARE0
 #define SOC_RTC_RTIMER_CH NRFX_RTC_INT_COMPARE1
-#define SOC_RTC_ETIMER_CH NRFX_RTC_INT_COMPARE2
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -77,10 +73,8 @@ void soc_rtc_init(void);
 
 /**
  * \brief Schedule an RTC one-shot compare event
- * \param channel RTC_CH0 or RTC_CH1
- * \param t The time when the event will be fired. This is an absolute
- *          time, in other words the event will fire AT time \e t,
- *          not IN \e t ticks
+ * \param channel The RTC channel to use
+ * \param ref_time The time when the event will be fired.
  *
  * Channel RTC_CH0 is reserved for the rtimer. RTC_CH1 is reserved
  * for the system clock.
@@ -88,7 +82,7 @@ void soc_rtc_init(void);
  * User applications should not use this function. User applications should
  * instead use Contiki's timer-related libraries
  */
-void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t t);
+void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time);
 
 
 /**
@@ -97,7 +91,7 @@ void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t t);
  *
  * The rtimer ticks per seconds are defined in the macro RTIMER_SECOND
  */
-rtimer_clock_t soc_rtc_get_counter_value(void);
+rtimer_clock_t soc_rtc_get_rtimer_ticks(void);
 
 /**
  * \brief Getting th ticks of the CLOCK since startup
@@ -105,7 +99,7 @@ rtimer_clock_t soc_rtc_get_counter_value(void);
  *
  * The clock ticks per seccons are defined in the macro CLOCK_SECOND
  */
-clock_time_t soc_rtc_get_clock_time(void);
+clock_time_t soc_rtc_get_clock_ticks(void);
 
 /**
  * \brief Helper Function in lpm.c to calculate the next wakeup time
@@ -116,7 +110,6 @@ rtimer_clock_t soc_rtc_last_isr_time(void);
 #endif /* SOC_RTC_H_ */
 /*---------------------------------------------------------------------------*/
 /**
- * @}
  * @}
  * @}
  */

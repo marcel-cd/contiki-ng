@@ -82,14 +82,13 @@ rtimer_arch_init(void)
 
   /* RTC is needed for NRF_LOWPOWER Mode */
   soc_rtc_init();
-
   nrf_timer_event_clear(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0);
   nrf_timer_frequency_set(NRF_RTIMER_TIMER, NRF_TIMER_FREQ_62500Hz);
   nrf_timer_bit_width_set(NRF_RTIMER_TIMER, NRF_TIMER_BIT_WIDTH_32);
   nrf_timer_mode_set(NRF_RTIMER_TIMER, NRF_TIMER_MODE_TIMER);
   nrf_timer_int_enable(NRF_RTIMER_TIMER, NRF_TIMER_INT_COMPARE0_MASK);
-  /* in lowpower mode, we use the RTC to trigger the next rtimer */
 #ifdef NRF_LOWPOWER
+  /* in lowpower mode, we use the RTC for rtimer */
 #else
   NVIC_ClearPendingIRQ(NRF_RTIMER_IRQn);
   NVIC_EnableIRQ(NRF_RTIMER_IRQn);
@@ -122,7 +121,7 @@ rtimer_arch_schedule(rtimer_clock_t t)
  *
  */
 rtimer_clock_t rtimer_arch_now() {
-  return soc_rtc_get_counter_value();
+  return soc_rtc_get_rtimer_ticks();
 }
 /*---------------------------------------------------------------------------*/
 /**
