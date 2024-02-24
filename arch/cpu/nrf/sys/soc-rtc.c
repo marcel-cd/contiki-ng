@@ -86,24 +86,30 @@ static clock_time_t rtc_max_clock_ticks = 0;
 static rtimer_clock_t rtc_max_rtimer_ticks = 0;
 static volatile uint32_t overlow = 0;
 /*---------------------------------------------------------------------------*/
-static void clock_handler(nrfx_clock_evt_type_t event) { (void)event; }
+static void
+clock_handler(nrfx_clock_evt_type_t event)
+{
+  (void)event;
+}
 /*---------------------------------------------------------------------------*/
 /**
  * @brief Function for handling the RTC<instance> interrupts
  * @param int_type Type of interrupt to be handled
  */
-static void rtc_handler(nrfx_rtc_int_type_t int_type) {
+static void
+rtc_handler(nrfx_rtc_int_type_t int_type)
+{
   uint32_t next;
   last_isr_time = nrfx_rtc_counter_get(&rtc);
-  if (int_type == SOC_RTC_SYSTEM_CH) {
+  if(int_type == SOC_RTC_SYSTEM_CH) {
     clock_update();
     next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT) & MULTIPLE_256_MASK;
     nrfx_rtc_cc_set(&rtc, SOC_RTC_SYSTEM_CH, next, true);
-  } else if (int_type == SOC_RTC_RTIMER_CH) {
-    // rtimer event
+  } else if(int_type == SOC_RTC_RTIMER_CH) {
+    /* rtimer event */
     rtimer_run_next();
     /* We need to handle the compare event */
-  } else if (int_type == NRFX_RTC_INT_OVERFLOW) {
+  } else if(int_type == NRFX_RTC_INT_OVERFLOW) {
     overlow++;
   }
 }
@@ -111,10 +117,12 @@ static void rtc_handler(nrfx_rtc_int_type_t int_type) {
 /**
  * @brief Function starting the internal LFCLK XTAL oscillator.
  */
-static void lfclk_config(void) {
+static void
+lfclk_config(void)
+{
   nrfx_err_t err_code = nrfx_clock_init(clock_handler);
 
-  if (err_code != NRFX_SUCCESS) {
+  if(err_code != NRFX_SUCCESS) {
     return;
   }
 
@@ -126,23 +134,27 @@ static void lfclk_config(void) {
 /**
  * @brief Function initialization and configuration of RTC driver instance.
  */
-static void rtc_config(void) {
+static void
+rtc_config(void)
+{
   nrfx_err_t err_code;
 
   /*Initialize RTC instance */
   nrfx_rtc_config_t config = NRFX_RTC_DEFAULT_CONFIG;
-  config.prescaler = RTC_FREQ_TO_PRESCALER(32768); // full speed...
+  config.prescaler = RTC_FREQ_TO_PRESCALER(32768); /* full speed... */
   config.interrupt_priority = 6;
   config.reliable = 0;
 
   err_code = nrfx_rtc_init(&rtc, &config, rtc_handler);
 
-  if (err_code != NRFX_SUCCESS) {
+  if(err_code != NRFX_SUCCESS) {
     return;
   }
 }
 /*---------------------------------------------------------------------------*/
-void soc_rtc_init(void) {
+void
+soc_rtc_init(void)
+{
   uint32_t next;
 
   lfclk_config();
@@ -163,31 +175,60 @@ void soc_rtc_init(void) {
   nrfx_rtc_cc_set(&rtc, SOC_RTC_SYSTEM_CH, next, true);
 }
 /*---------------------------------------------------------------------------*/
-void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks) {
-  // keep WAKEUP on SystemChannel only every CLOCK_SECOND TICK
-  if (channel == SOC_RTC_SYSTEM_CH) {
-    nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks & MULTIPLE_256_MASK) , true);
+void
+soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks)
+{
+  /* keep WAKEUP on SystemChannel only every CLOCK_SECOND TICK */
+  if(channel == SOC_RTC_SYSTEM_CH) {
+    nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks & MULTIPLE_256_MASK), true);
   } else {
     nrfx_rtc_cc_set(&rtc, channel, (clock_time_t)(ticks % rtc_max_rtimer_ticks),
                     true);
   }
 }
-rtimer_clock_t soc_rtc_get_rtimer_ticks() {
-  // RTC is a 24 bit counter, so we need to handle the overflow
+rtimer_clock_t
+soc_rtc_get_rtimer_ticks()
+{
+  /* RTC is a 24 bit counter, so we need to handle the overflow */
   /* return (rtc_max_rtimer_ticks * 0) +  (rtimer_clock_t)nrfx_rtc_counter_get(&rtc); */
-  return (rtc_max_rtimer_ticks * overlow) +  (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
+  return (rtc_max_rtimer_ticks * overlow) + (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
 }
-clock_time_t soc_rtc_get_clock_ticks() {
+clock_time_t
+soc_rtc_get_clock_ticks()
+{
   return (rtc_max_clock_ticks * overlow) + (nrfx_rtc_counter_get(&rtc) / COMPARE_INCREMENT);
 }
 /*---------------------------------------------------------------------------*/
-rtimer_clock_t soc_rtc_last_isr_time(void) { return last_isr_time; }
+rtimer_clock_t
+soc_rtc_last_isr_time(void)
+{
+  return last_isr_time;
+}
 /*---------------------------------------------------------------------------*/
 #else
-void sod_rtc_init(void) {};
-void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time) { return 0; }
-rtimer_clock_t soc_rtc_get_rtimer_ticks(void) { return 0; }
-clock_time_t soc_rtc_get_clock_ticks(void) { return 0; }
-rtimer_clock_t soc_rtc_last_isr_time(void) { return 0; }
+void
+sod_rtc_init(void)
+{
+}
+void
+soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time)
+{
+  return 0;
+}
+rtimer_clock_t
+soc_rtc_get_rtimer_ticks(void)
+{
+  return 0;
+}
+clock_time_t
+soc_rtc_get_clock_ticks(void)
+{
+  return 0;
+}
+rtimer_clock_t
+soc_rtc_last_isr_time(void)
+{
+  return 0;
+}
 #endif /* NRF_LOWPOWER */
 /** @} */

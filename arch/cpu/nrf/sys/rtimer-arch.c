@@ -95,10 +95,9 @@ rtimer_arch_init(void)
 #endif
   nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_START);
 }
-
 #ifdef NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
- /**
+/**
  *
  * This function schedules a one-shot event with the AON RTC.
  *
@@ -120,7 +119,9 @@ rtimer_arch_schedule(rtimer_clock_t t)
  * rtimer ticks
  *
  */
-rtimer_clock_t rtimer_arch_now() {
+rtimer_clock_t
+rtimer_arch_now()
+{
   return soc_rtc_get_rtimer_ticks();
 }
 /*---------------------------------------------------------------------------*/
@@ -142,7 +143,7 @@ rtimer_arch_next()
 void
 rtimer_arch_schedule(rtimer_clock_t t)
 {
-  /* 
+  /*
    * This function schedules a one-shot event with the nRF RTC.
    */
   nrf_timer_cc_set(NRF_RTIMER_TIMER, NRF_TIMER_CC_CHANNEL0, t);

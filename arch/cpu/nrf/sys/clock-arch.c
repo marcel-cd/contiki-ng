@@ -81,7 +81,8 @@ clock_update(void)
 }
 void
 clock_init(void)
-{}
+{
+}
 /*---------------------------------------------------------------------------*/
 clock_time_t
 clock_time(void)
@@ -89,7 +90,9 @@ clock_time(void)
   return soc_rtc_get_clock_ticks();
 }
 /*---------------------------------------------------------------------------*/
-unsigned long clock_seconds(void) {
+unsigned long
+clock_seconds(void)
+{
   return (unsigned long)(clock_time() / CLOCK_SECOND);
 }
 /*---------------------------------------------------------------------------*/
@@ -129,7 +132,7 @@ static volatile clock_time_t ticks;
 static void
 clock_handler(nrfx_clock_evt_type_t event)
 {
-  (void) event;
+  (void)event;
 }
 /*---------------------------------------------------------------------------*/
 /**

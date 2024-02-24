@@ -87,10 +87,10 @@
 /* Prototype of a function in clock.c. Called every time we come out of DS */
 void clock_update(void);
 /*---------------------------------------------------------------------------*/
-#define assert_wfi()                                                           \
-  do {                                                                         \
-    __asm("wfi" ::);                                                           \
-  } while (0)
+#define assert_wfi() \
+        do { \
+          __asm("wfi" ::); \
+        } while(0)
 
 /*---------------------------------------------------------------------------*/
 /*
@@ -103,7 +103,6 @@ wake_up(void)
 
   ENERGEST_SWITCH(ENERGEST_TYPE_DEEP_LPM, ENERGEST_TYPE_CPU);
 
-
   watchdog_periodic();
 
   /*
@@ -114,7 +113,6 @@ wake_up(void)
   nrfx_clock_hfclk_start();
   nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_START);
 }
-
 /*---------------------------------------------------------------------------*/
 static uint8_t
 check_next_rtimer(rtimer_clock_t now, rtimer_clock_t *next_rtimer, bool *next_rtimer_set)
@@ -191,7 +189,7 @@ setup_sleep_mode(void)
     max_pm = pm;
   }
 
-  if (max_pm == LPM_MODE_SLEEP) {
+  if(max_pm == LPM_MODE_SLEEP) {
     /* In sleep mode, HFXO is powered up, therefore we do  not have
      * to wakeup earlier to powering up the HFXO */
     if(next_etimer_set) {
@@ -211,8 +209,7 @@ setup_sleep_mode(void)
        * But do not stay in this mode for too long, otherwise watchdog will be trigerred. */
       soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now + MAX_SLEEP_TIME);
     }
-
-  } else if (max_pm == LPM_MODE_DEEP_SLEEP) {
+  } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
     /* Watchdog is not enabled, so deep sleep can continue an arbitrary long time.
      * On the other hand, when we have to start again the system, it takes a while
      * till the HFXO is stable and the system is ready to run. Therefore, we have
@@ -237,7 +234,6 @@ setup_sleep_mode(void)
 
   return max_pm;
 }
-
 /*---------------------------------------------------------------------------*/
 void
 lpm_sleep(void)
@@ -275,7 +271,6 @@ deep_sleep(void)
    * unpending events so the handlers can fire
    */
   wake_up();
-
 }
 /*---------------------------------------------------------------------------*/
 void
@@ -289,7 +284,7 @@ lpm_drop()
   max_pm = setup_sleep_mode();
 
   /* Drop */
-  if (max_pm == LPM_MODE_SLEEP) {
+  if(max_pm == LPM_MODE_SLEEP) {
     lpm_sleep();
   } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
     deep_sleep();

@@ -70,7 +70,6 @@
  */
 void soc_rtc_init(void);
 
-
 /**
  * \brief Schedule an RTC one-shot compare event
  * \param channel The RTC channel to use
@@ -83,7 +82,6 @@ void soc_rtc_init(void);
  * instead use Contiki's timer-related libraries
  */
 void soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time);
-
 
 /**
  * \brief Getting th ticks of the RTIMER since startup

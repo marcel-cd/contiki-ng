@@ -493,7 +493,7 @@ rssi_read(void)
 static uint8_t
 lqi_convert_to_802154_scale(uint8_t lqi_hw)
 {
-  return (uint8_t)lqi_hw > 63 ? 255 : lqi_hw *ED_RSSISCALE;
+  return (uint8_t)lqi_hw > 63 ? 255 : lqi_hw * ED_RSSISCALE;
 }
 /*---------------------------------------------------------------------------*/
 /* Netstack API functions */
@@ -732,8 +732,8 @@ read_frame(void *buf, unsigned short bufsize)
   /* PPI Radio trigger uses NRF_TIMER0 as counter, we have to convert to our RTC based RTIMER  */
   NRF_TIMER0->TASKS_CAPTURE[0] = 1;
   uint64_t now = RTIMER_NOW();
-  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart)/(float)62500*RTIMER_SECOND) ;
-  timestamps.end = now - ((NRF_TIMER0->CC[0] -timestamps.end)/(float)62500*RTIMER_SECOND);
+  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart) / (float)62500 * RTIMER_SECOND);
+  timestamps.end = now - ((NRF_TIMER0->CC[0] - timestamps.end) / (float)62500 * RTIMER_SECOND);
   timestamps.sfd = timestamps.framestart - BYTE_DURATION_RTIMER;
 #else
   timestamps.sfd = timestamps.framestart - BYTE_DURATION_RTIMER;
