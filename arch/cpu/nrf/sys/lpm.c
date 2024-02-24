@@ -62,11 +62,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
-#include "sys/log.h"
-#define LOG_MODULE "LPM"
-#define LOG_LEVEL LOG_LEVEL_DBG
 
+#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 /*
  * Don't consider standby mode if the next AON RTC event is scheduled to fire
@@ -273,7 +270,6 @@ deep_sleep(void)
   wake_up();
 }
 /*---------------------------------------------------------------------------*/
-#if NRF_LOWPOWER
 void
 lpm_drop()
 {
@@ -291,7 +287,8 @@ lpm_drop()
   }
   critical_exit(status);
 }
-#else
+
+#else /* NRF_LOWPOWER */
 void
 lpm_drop()
 {
