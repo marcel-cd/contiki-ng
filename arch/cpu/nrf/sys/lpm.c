@@ -287,7 +287,6 @@ lpm_drop()
   }
   critical_exit(status);
 }
-
 #else /* NRF_LOWPOWER */
 void
 lpm_drop()
