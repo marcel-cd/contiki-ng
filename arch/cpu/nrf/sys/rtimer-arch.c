@@ -1,4 +1,5 @@
 /*
+ * Copyright (c) 2024, Marcel Graber <marcel@clever.design>
  * Copyright (c) 2020, Toshiba BRIL
  * Copyright (C) 2020 Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
  * All rights reserved.
@@ -42,6 +43,7 @@
  * \file
  *         Implementation of the architecture dependent rtimer functions for the nRF
  * \author
+ *         Marcel Graber <marcel@clever.design>
  *         Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
  *
  */
@@ -71,32 +73,23 @@
 #error Unsupported timer for rtimer
 #endif
 
-#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 static volatile rtimer_clock_t next_trigger = 0;
-/*---------------------------------------------------------------------------*/
-#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 void
 rtimer_arch_init(void)
 {
 
-  /* RTC is needed for NRF_LOWPOWER Mode */
+  /* good place to initialize the RTC, used as base tick for rtimer */
   soc_rtc_init();
+
   nrf_timer_event_clear(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0);
   nrf_timer_frequency_set(NRF_RTIMER_TIMER, NRF_TIMER_FREQ_62500Hz);
   nrf_timer_bit_width_set(NRF_RTIMER_TIMER, NRF_TIMER_BIT_WIDTH_32);
   nrf_timer_mode_set(NRF_RTIMER_TIMER, NRF_TIMER_MODE_TIMER);
   nrf_timer_int_enable(NRF_RTIMER_TIMER, NRF_TIMER_INT_COMPARE0_MASK);
-#if NRF_LOWPOWER
-  /* in lowpower mode, we use the RTC for rtimer */
-#else
-  NVIC_ClearPendingIRQ(NRF_RTIMER_IRQn);
-  NVIC_EnableIRQ(NRF_RTIMER_IRQn);
-#endif
   nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_START);
 }
-#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 /**
  *
@@ -137,35 +130,6 @@ rtimer_arch_next()
 {
   return RTIMER_CLOCK_LT(RTIMER_NOW(), (next_trigger)) ? next_trigger : 0;
 }
-/*---------------------------------------------------------------------------*/
-
-#else
-/*---------------------------------------------------------------------------*/
-void
-rtimer_arch_schedule(rtimer_clock_t t)
-{
-  /*
-   * This function schedules a one-shot event with the nRF RTC.
-   */
-  nrf_timer_cc_set(NRF_RTIMER_TIMER, NRF_TIMER_CC_CHANNEL0, t);
-}
-/*---------------------------------------------------------------------------*/
-rtimer_clock_t
-rtimer_arch_now()
-{
-  nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_CAPTURE1);
-  return nrf_timer_cc_get(NRF_RTIMER_TIMER, NRF_TIMER_CC_CHANNEL1);
-}
-/*---------------------------------------------------------------------------*/
-void
-NRF_RTIMER_IRQHandler(void)
-{
-  if(nrf_timer_event_check(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0)) {
-    nrf_timer_event_clear(NRF_RTIMER_TIMER, NRF_TIMER_EVENT_COMPARE0);
-    rtimer_run_next();
-  }
-}
-#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 /**
  * @}

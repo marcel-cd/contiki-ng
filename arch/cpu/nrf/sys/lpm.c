@@ -63,7 +63,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#if NRF_LOWPOWER
 /*---------------------------------------------------------------------------*/
 /*
  * Don't consider standby mode if the next AON RTC event is scheduled to fire
@@ -274,35 +273,23 @@ void
 lpm_drop()
 {
   uint8_t max_pm;
-  int_master_status_t status;
-  status = critical_enter();
-
-  max_pm = setup_sleep_mode();
-
-  /* Drop */
-  if(max_pm == LPM_MODE_SLEEP) {
-    lpm_sleep();
-  } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
-    deep_sleep();
-  }
-  critical_exit(status);
-}
-#else /* NRF_LOWPOWER */
-void
-lpm_drop()
-{
-  int_master_status_t status;
   int abort;
+  int_master_status_t status;
+
   status = critical_enter();
   abort = process_nevents();
-  if(!abort) {
-    ENERGEST_SWITCH(ENERGEST_TYPE_CPU, ENERGEST_TYPE_LPM);
-    __WFI();
-    ENERGEST_SWITCH(ENERGEST_TYPE_LPM, ENERGEST_TYPE_CPU);
+
+  if (!abort) {
+    max_pm = setup_sleep_mode();
+    /* Drop */
+    if (max_pm == LPM_MODE_SLEEP) {
+      lpm_sleep();
+    } else if (max_pm == LPM_MODE_DEEP_SLEEP) {
+      deep_sleep();
+    }
   }
   critical_exit(status);
 }
-#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 /** @} */
 /** @} */

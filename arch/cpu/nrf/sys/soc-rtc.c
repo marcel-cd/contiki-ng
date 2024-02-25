@@ -41,7 +41,6 @@
 
 #include "soc-rtc.h"
 
-#if NRF_LOWPOWER
 #include "etimer.h"
 #include "lpm.h"
 #include "rtimer.h"
@@ -206,29 +205,4 @@ soc_rtc_last_isr_time(void)
   return last_isr_time;
 }
 /*---------------------------------------------------------------------------*/
-#else
-void
-soc_rtc_init(void)
-{
-}
-void
-soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ref_time)
-{
-}
-rtimer_clock_t
-soc_rtc_get_rtimer_ticks(void)
-{
-  return 0;
-}
-clock_time_t
-soc_rtc_get_clock_ticks(void)
-{
-  return 0;
-}
-rtimer_clock_t
-soc_rtc_last_isr_time(void)
-{
-  return 0;
-}
-#endif /* NRF_LOWPOWER */
 /** @} */

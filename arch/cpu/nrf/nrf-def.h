@@ -79,12 +79,8 @@
 #define RADIO_DELAY_BEFORE_RX         ((unsigned)US_TO_RTIMERTICKS(250))
 #define RADIO_DELAY_BEFORE_DETECT     0
 /*---------------------------------------------------------------------------*/
-#if NRF_LOWPOWER
-/* 32.768 kHz clock */
+/* RTC with no prescaler */
 #define RTIMER_ARCH_SECOND 32768
-#else
-#define RTIMER_ARCH_SECOND 62500
-#endif /* NRF_LOWPOWER */
 /*---------------------------------------------------------------------------*/
 #define GPIO_HAL_CONF_ARCH_HDR_PATH          "gpio-hal-arch.h"
 #define GPIO_HAL_CONF_ARCH_SW_TOGGLE         0
