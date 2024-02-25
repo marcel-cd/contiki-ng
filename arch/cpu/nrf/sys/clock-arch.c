@@ -39,10 +39,6 @@
  * \addtogroup nrf-clock Clock driver
  * @{
  *
- * In lowpoer mode, the RTC needs additional handling to wake up the CPU and
- * run the rtimer / etimer code. This is done in soc-rtc.c. Therefore, colck-arch.c
- * only needs to handle the software clock.
- *
  * \file
  *         Software clock implementation for the nRF.
  *
@@ -78,6 +74,7 @@ clock_update(void)
     etimer_request_poll();
   }
 }
+/*---------------------------------------------------------------------------*/
 void
 clock_init(void)
 {
@@ -119,7 +116,7 @@ clock_delay(unsigned int i)
 {
   clock_delay_usec(i);
 }
-
+/*---------------------------------------------------------------------------*/
 /**
  * @}
  * @}

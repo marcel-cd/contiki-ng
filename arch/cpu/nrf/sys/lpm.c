@@ -53,6 +53,7 @@
 #include "contiki.h"
 #include "nrf-def.h"
 #include "rtimer-arch.h"
+#include "rtimer.h"
 #include "soc-rtc.h"
 #include "sys/energest.h"
 #include "sys/process.h"
@@ -78,16 +79,15 @@
 #define MAX_SLEEP_TIME        RTIMER_SECOND
 
 /* Minimal safe sleep-time */
-#define MIN_SAFE_SCHEDULE     8u
+#define MIN_SAFE_SCHEDULE     US_TO_RTIMERTICKS(1000) /* 1.0 ms */
 /*---------------------------------------------------------------------------*/
 /* Prototype of a function in clock.c. Called every time we come out of DS */
 void clock_update(void);
 /*---------------------------------------------------------------------------*/
-#define assert_wfi() \
-        do { \
-          __asm("wfi" ::); \
-        } while(0)
-
+#define assert_wfi()                                                           \
+  do {                                                                         \
+    __asm("wfi" ::);                                                           \
+  } while (0)
 /*---------------------------------------------------------------------------*/
 /*
  * Notify all modules that we're back on and rely on them to restore clocks
@@ -164,6 +164,7 @@ setup_sleep_mode(void)
   uint8_t pm;
 
   rtimer_clock_t now;
+  rtimer_clock_t trigger_etimer = 0;
   rtimer_clock_t next_rtimer = 0;
   rtimer_clock_t next_etimer = 0;
   bool next_rtimer_set = false;
@@ -184,26 +185,25 @@ setup_sleep_mode(void)
   if(pm < max_pm) {
     max_pm = pm;
   }
-
+  trigger_etimer = RTIMER_CLOCK_MAX;
   if(max_pm == LPM_MODE_SLEEP) {
     /* In sleep mode, HFXO is powered up, therefore we do  not have
      * to wakeup earlier to powering up the HFXO */
     if(next_etimer_set) {
       /* Schedule the next system wakeup due to etimer */
       if(RTIMER_CLOCK_LT(next_etimer, now + MIN_SAFE_SCHEDULE)) {
-        /* Too soon in future, use this minimal interval instead */
-        /* next_etimer = now + MIN_SAFE_SCHEDULE; */
+        /* Too soon in future, keep the system awake */
       } else if(RTIMER_CLOCK_LT(now + MAX_SLEEP_TIME, next_etimer)) {
         /* Too far in future, use MAX_SLEEP_TIME instead */
-        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now + MAX_SLEEP_TIME);
+        trigger_etimer = now + MAX_SLEEP_TIME;
       } else {
-        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_etimer);
+        trigger_etimer = next_etimer;
       }
     } else {
       /* No etimers set. Since by default the CH1 RTC fires once every clock tick,
        * need to explicitly schedule a wakeup in the future to save energy.
        * But do not stay in this mode for too long, otherwise watchdog will be trigerred. */
-      soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now + MAX_SLEEP_TIME);
+      trigger_etimer = next_etimer;
     }
   } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
     /* Watchdog is not enabled, so deep sleep can continue an arbitrary long time.
@@ -213,19 +213,22 @@ setup_sleep_mode(void)
     if(next_rtimer_set) {
       if(!next_etimer_set || RTIMER_CLOCK_LT(next_rtimer - SLEEP_GUARD_TIME, next_etimer)) {
         /* schedule a wakeup briefly before the next rtimer to wake up the system */
-        soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_rtimer - SLEEP_GUARD_TIME);
+        trigger_etimer = next_rtimer - SLEEP_GUARD_TIME;
       }
     }
 
     if(next_etimer_set) {
       /* Schedule the next system wakeup due to etimer.
        * No need to compare the `next_etimer` to `now` here as this branch
-       * is only entered when there's sufficient time for deep sleeping. */
-      /* soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, next_etimer); */
-    } else {
-      /* Use the farthest possible wakeup time */
-      /* soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, now - 1); */
+       * is only entered when there's sufficient time for deep sleeping.
+       * keep the trigger_etimer from the step before, if it is earlier */
+      if (RTIMER_CLOCK_LT(next_etimer, trigger_etimer)) {
+        trigger_etimer = next_etimer;
+      }
     }
+  }
+  if (trigger_etimer != RTIMER_CLOCK_MAX) {
+    soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, trigger_etimer);
   }
 
   return max_pm;

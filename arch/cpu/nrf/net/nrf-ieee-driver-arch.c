@@ -722,17 +722,19 @@ read_frame(void *buf, unsigned short bufsize)
   timestamps.end = nrf_timer_cc_get(NRF_TIMER0, NRF_TIMER_CC_CHANNEL2);
   timestamps.mpdu_duration = rx_buf.phr * BYTE_DURATION_RTIMER;
 
+
+  /* Use NRF_TIMER0 CC0 for conversion to rtimer(based on RTC) */
+  /* timestamps.sfd will be used in TSCH Module for slot calculation */
+  NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+  uint64_t now = RTIMER_NOW();
+  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart) / (float)62500 * RTIMER_SECOND);
+  timestamps.end = now - ((NRF_TIMER0->CC[0] - timestamps.end) / (float)62500 * RTIMER_SECOND);
+
   /*
    * Timestamp in rtimer ticks of the reception of the SFD. The SFD was
    * received 1 byte before the PHR, therefore all we need to do is subtract
    * 2 symbols (2 rtimer ticks) from the PPI FRAMESTART timestamp.
    */
-
-  /* PPI Radio trigger uses NRF_TIMER0 as timebase, we have to convert to RTC based RTIMER  */
-  NRF_TIMER0->TASKS_CAPTURE[0] = 1;
-  uint64_t now = RTIMER_NOW();
-  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart) / (float)62500 * RTIMER_SECOND);
-  timestamps.end = now - ((NRF_TIMER0->CC[0] - timestamps.end) / (float)62500 * RTIMER_SECOND);
   timestamps.sfd = timestamps.framestart - BYTE_DURATION_RTIMER;
 
   LOG_DBG("Read frame: len=%d, RSSI=%d, LQI=0x%02x\n", payload_len, last_rssi,
