@@ -39,6 +39,8 @@
 #include "clock.h"
 #include "contiki.h"
 
+#include "gpio-hal-arch.h"
+#include "nrf52840-dk-def.h"
 #include "soc-rtc.h"
 
 #include "etimer.h"
@@ -84,7 +86,7 @@ static const nrfx_rtc_t rtc = NRFX_RTC_INSTANCE(NRF_CLOCK_RTC_INSTANCE);
 static rtimer_clock_t last_isr_time = 0;
 static clock_time_t rtc_max_clock_ticks = 0;
 static rtimer_clock_t rtc_max_rtimer_ticks = 0;
-static volatile uint32_t overlow = 0;
+static volatile uint32_t overflow = 0;
 /*---------------------------------------------------------------------------*/
 static void
 clock_handler(nrfx_clock_evt_type_t event)
@@ -96,11 +98,11 @@ clock_handler(nrfx_clock_evt_type_t event)
  * @brief Function for handling the RTC<instance> interrupts
  * @param int_type Type of interrupt to be handled
  */
+#include "gpio-hal-arch.h"
 static void
 rtc_handler(nrfx_rtc_int_type_t int_type)
 {
   uint32_t next;
-  last_isr_time = nrfx_rtc_counter_get(&rtc);
   if(int_type == SOC_RTC_SYSTEM_CH) {
     clock_update();
     next = (nrfx_rtc_counter_get(&rtc) + COMPARE_INCREMENT) & MULTIPLE_256_MASK;
@@ -110,8 +112,10 @@ rtc_handler(nrfx_rtc_int_type_t int_type)
     rtimer_run_next();
     /* We need to handle the compare event */
   } else if(int_type == NRFX_RTC_INT_OVERFLOW) {
-    overlow++;
+    gpio_hal_arch_toggle_pin(DEBUG2_PORT, DEBUG2_PIN);
+    overflow++;
   }
+  last_isr_time = soc_rtc_get_rtimer_ticks();
 }
 /*---------------------------------------------------------------------------*/
 /**
@@ -178,7 +182,8 @@ soc_rtc_init(void)
 void
 soc_rtc_schedule_one_shot(uint32_t channel, rtimer_clock_t ticks)
 {
-  clock_time_t next = ticks % rtc_max_rtimer_ticks;
+  /* clock_time_t next = (clock_time_t)RTC_WRAP(ticks); // % rtc_max_rtimer_ticks; */
+  clock_time_t next = (clock_time_t)ticks; // % rtc_max_rtimer_ticks;
   if(channel == SOC_RTC_SYSTEM_CH) {
     /* system/etimeer tick will be triggered only every CLOCK_SECOND tick 1/128 */
     nrfx_rtc_cc_set(&rtc, channel, next & MULTIPLE_256_MASK, true);
@@ -192,13 +197,14 @@ rtimer_clock_t
 soc_rtc_get_rtimer_ticks()
 {
   /* RTC is a 24 bit counter, so we need to handle the overflow */
-  return (rtc_max_clock_ticks * overlow) + (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
+  return (rtc_max_rtimer_ticks * overflow) +
+    (rtimer_clock_t)nrfx_rtc_counter_get(&rtc);
 }
 /*---------------------------------------------------------------------------*/
 clock_time_t
 soc_rtc_get_clock_ticks()
 {
-  return (rtc_max_clock_ticks * overlow) + (nrfx_rtc_counter_get(&rtc) / COMPARE_INCREMENT);
+  return soc_rtc_get_rtimer_ticks() / COMPARE_INCREMENT;
 }
 /*---------------------------------------------------------------------------*/
 rtimer_clock_t
