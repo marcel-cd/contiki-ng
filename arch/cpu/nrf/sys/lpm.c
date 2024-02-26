@@ -35,21 +35,19 @@
  * \addtogroup nrf-sys System drivers
  * @{
  *
- * In lowpower mode, the RTC needs additional handling to wake up the CPU and
- * run the rtimer / etimer code. This is done in soc-rtc.c. Therefore, colck-arch.c
- * only needs to handle the software clock.
+ * This implementation is based on the cc26x0-cc13x0 platform.
  *
  * \file
- *         Software clock implementation for the nRF.
+ *         Low Power Mode (LPM) driver for the nRF52
  *
  * \author
- *         Marcel Graber <marcel@clever.design> (lowpower mode)
+ *         Marcel Graber <marcel@clever.design>
  *
  */
 /*---------------------------------------------------------------------------*/
+#include "contiki.h"
 #include "lpm.h"
 #include "clock.h"
-#include "contiki.h"
 #include "etimer.h"
 #include "nrf-def.h"
 #include "rtimer-arch.h"
@@ -57,9 +55,9 @@
 #include "soc-rtc.h"
 #include "sys/energest.h"
 #include "sys/process.h"
-#include "nrfx_clock.h"
 
 #include "hal/nrf_timer.h"
+#include "nrfx_clock.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -103,11 +101,11 @@ wake_up(void)
 
   /*
    * In LowPower Mode, HFCLK is used by the IEEE 802.15.4 radio.
-   * and NRF_TIMER0 is used in the nrf-ieee-driver-arch.c
+   * and NRF_RTIMER_TIMER is used in the nrf-ieee-driver-arch.c
    * In non-LowPower Mode, HFCLK is also used for the RTIMER
    */
   nrfx_clock_hfclk_start();
-  nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_START);
+  nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_START);
 }
 /*---------------------------------------------------------------------------*/
 static uint8_t
@@ -251,10 +249,10 @@ deep_sleep(void)
   watchdog_periodic();
 
   /* In LowPower Mode, HFCLK is used by the IEEE 802.15.4 radio.
-   * and NRF_TIMER0 in nrf-ieee-driver-arch.c
+   * and NRF_RTIMER_TIMER in nrf-ieee-driver-arch.c
    */
   nrfx_clock_hfclk_stop();
-  nrf_timer_task_trigger(NRF_TIMER0, NRF_TIMER_TASK_SHUTDOWN);
+  nrf_timer_task_trigger(NRF_RTIMER_TIMER, NRF_TIMER_TASK_SHUTDOWN);
   ENERGEST_SWITCH(ENERGEST_TYPE_CPU, ENERGEST_TYPE_DEEP_LPM);
 
   /* Deep Sleep */

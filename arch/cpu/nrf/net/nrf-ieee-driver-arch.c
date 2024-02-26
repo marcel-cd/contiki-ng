@@ -50,6 +50,7 @@
 #include "contiki.h"
 #include "dev/radio.h"
 #include "nrfx_clock.h"
+#include "rtimer-arch.h"
 #include "sys/energest.h"
 #include "sys/int-master.h"
 #include "sys/critical.h"
@@ -339,8 +340,8 @@ setup_interrupts(void)
 /*---------------------------------------------------------------------------*/
 /*
  * Set up timestamping with PPI:
- * - Programme Channel 1 for RADIO->FRAMESTART--->TIMER0->CAPTURE[3]
- * - Programme Channel 2 for RADIO->END--->TIMER0->CAPTURE[2]
+ * - Programme Channel 1 for RADIO->FRAMESTART--->NRF_RTIMER_TIMER->CAPTURE[3]
+ * - Programme Channel 2 for RADIO->END--->NRF_RTIMER_TIMER->CAPTURE[2]
  */
 static void
 setup_ppi_timestamping(void)
@@ -348,11 +349,11 @@ setup_ppi_timestamping(void)
   nrfx_gppi_channel_endpoints_setup(
     NRF_PPI_FRAMESTART_CHANNEL,
     nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_FRAMESTART),
-    nrf_timer_task_address_get(NRF_TIMER0, NRF_TIMER_TASK_CAPTURE3));
+    nrf_timer_task_address_get(NRF_RTIMER_TIMER, NRF_TIMER_TASK_CAPTURE3));
   nrfx_gppi_channel_endpoints_setup(
     NRF_PPI_END_CHANNEL,
     nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_END),
-    nrf_timer_task_address_get(NRF_TIMER0, NRF_TIMER_TASK_CAPTURE2));
+    nrf_timer_task_address_get(NRF_RTIMER_TIMER, NRF_TIMER_TASK_CAPTURE2));
   nrfx_gppi_channels_enable(1uL << NRF_PPI_FRAMESTART_CHANNEL
                             | 1uL << NRF_PPI_END_CHANNEL);
 }
@@ -718,17 +719,17 @@ read_frame(void *buf, unsigned short bufsize)
 
   /* Latch timestamp values for this most recently received frame */
   timestamps.phr = rx_buf.phr;
-  timestamps.framestart = nrf_timer_cc_get(NRF_TIMER0, NRF_TIMER_CC_CHANNEL3);
-  timestamps.end = nrf_timer_cc_get(NRF_TIMER0, NRF_TIMER_CC_CHANNEL2);
+  timestamps.framestart = nrf_timer_cc_get(NRF_RTIMER_TIMER, NRF_TIMER_CC_CHANNEL3);
+  timestamps.end = nrf_timer_cc_get(NRF_RTIMER_TIMER, NRF_TIMER_CC_CHANNEL2);
   timestamps.mpdu_duration = rx_buf.phr * BYTE_DURATION_RTIMER;
 
 
-  /* Use NRF_TIMER0 CC0 for conversion to rtimer(based on RTC) */
+  /* Use NRF_RTIMER_TIMER CC0 for conversion to rtimer(based on RTC) */
   /* timestamps.sfd will be used in TSCH Module for slot calculation */
-  NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+  NRF_RTIMER_TIMER->TASKS_CAPTURE[0] = 1;
   uint64_t now = RTIMER_NOW();
-  timestamps.framestart = now - ((NRF_TIMER0->CC[0] - timestamps.framestart) / (float)62500 * RTIMER_SECOND);
-  timestamps.end = now - ((NRF_TIMER0->CC[0] - timestamps.end) / (float)62500 * RTIMER_SECOND);
+  timestamps.framestart = now - ((NRF_RTIMER_TIMER->CC[0] - timestamps.framestart) / (float)62500 * RTIMER_SECOND);
+  timestamps.end = now - ((NRF_RTIMER_TIMER->CC[0] - timestamps.end) / (float)62500 * RTIMER_SECOND);
 
   /*
    * Timestamp in rtimer ticks of the reception of the SFD. The SFD was

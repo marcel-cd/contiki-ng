@@ -49,29 +49,11 @@
  */
 /*---------------------------------------------------------------------------*/
 #include "contiki.h"
-
-#include "soc-rtc.h"
+#include "sys/rtimer.h"
+#include "sys/soc-rtc.h"
 
 #include "nrf.h"
 #include "hal/nrf_timer.h"
-
-#ifdef NRF_RTIMER_CONF_TIMER_INSTANCE
-#define TIMER_INSTANCE NRF_RTIMER_CONF_TIMER_INSTANCE
-#else
-#define TIMER_INSTANCE 0
-#endif
-
-#if TIMER_INSTANCE == 0
-#define NRF_RTIMER_TIMER      NRF_TIMER0
-#define NRF_RTIMER_IRQn       TIMER0_IRQn
-#define NRF_RTIMER_IRQHandler TIMER0_IRQHandler
-#elif TIMER_INSTANCE == 1
-#define NRF_RTIMER_TIMER      NRF_TIMER1
-#define NRF_RTIMER_IRQn       TIMER1_IRQn
-#define NRF_RTIMER_IRQHandler TIMER1_IRQHandler
-#else
-#error Unsupported timer for rtimer
-#endif
 
 /*---------------------------------------------------------------------------*/
 static volatile rtimer_clock_t next_trigger = 0;
