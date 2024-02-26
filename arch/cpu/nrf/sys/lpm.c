@@ -50,7 +50,10 @@
  */
 /*---------------------------------------------------------------------------*/
 #include "lpm.h"
+#include "clock.h"
 #include "contiki.h"
+#include "etimer.h"
+#include "gpio-hal-arch.h"
 #include "nrf-def.h"
 #include "rtimer-arch.h"
 #include "rtimer.h"
@@ -66,10 +69,10 @@
 
 /*---------------------------------------------------------------------------*/
 /*
- * Don't consider standby mode if the next AON RTC event is scheduled to fire
+ * Don't consider deep sleep mode if the next RTC event is scheduled to fire
  * in less than STANDBY_MIN_DURATION rtimer ticks
  */
-#define STANDBY_MIN_DURATION  US_TO_RTIMERTICKS(10000) /* 10.0 ms */
+#define STANDBY_MIN_DURATION  US_TO_RTIMERTICKS(20000) /* 20.0 ms */
 
 /* Wake up this much time earlier before the next rtimer */
 /* needed for HFXO power-up and debonce time             */
@@ -79,11 +82,13 @@
 #define MAX_SLEEP_TIME        RTIMER_SECOND
 
 /* Minimal safe sleep-time */
-#define MIN_SAFE_SCHEDULE     US_TO_RTIMERTICKS(1000) /* 1.0 ms */
+#define MIN_SAFE_SCHEDULE     US_TO_RTIMERTICKS(10000) /* 10.0 ms */
 /*---------------------------------------------------------------------------*/
 /* Prototype of a function in clock.c. Called every time we come out of DS */
 void clock_update(void);
 /*---------------------------------------------------------------------------*/
+/* #include "gpio-hal-arch.h" */
+/*   gpio_hal_arch_set_pin(DEBUG1_PORT, DEBUG1_PIN); \ */
 #define assert_wfi()                                                           \
   do {                                                                         \
     __asm("wfi" ::);                                                           \
@@ -141,16 +146,12 @@ check_next_etimer(rtimer_clock_t now, rtimer_clock_t *next_etimer, bool *next_et
   *next_etimer_set = false;
 
   /* Find out the time of the next etimer */
-  if(etimer_pending()) {
-    int32_t until_next_etimer = (int32_t)etimer_next_expiration_time() - (int32_t)clock_time();
-    if(until_next_etimer < 1) {
-      max_pm = MIN(max_pm, LPM_MODE_AWAKE);
-    } else {
-      *next_etimer_set = true;
-      *next_etimer = soc_rtc_last_isr_time() + (until_next_etimer * (RTIMER_SECOND / CLOCK_SECOND));
-      if(RTIMER_CLOCK_LT(*next_etimer, now + STANDBY_MIN_DURATION)) {
-        max_pm = MIN(max_pm, LPM_MODE_SLEEP);
-      }
+  if (etimer_pending()) {
+    clock_time_t next = etimer_next_expiration_time();
+    *next_etimer_set = true;
+    *next_etimer = next * (RTIMER_SECOND / CLOCK_SECOND);
+    if (RTIMER_CLOCK_LT(*next_etimer, now + STANDBY_MIN_DURATION)) {
+      max_pm = MIN(max_pm, LPM_MODE_SLEEP);
     }
   }
 
@@ -176,7 +177,6 @@ setup_sleep_mode(void)
   }
 
   now = RTIMER_NOW();
-
   pm = check_next_rtimer(now, &next_rtimer, &next_rtimer_set);
   if(pm < max_pm) {
     max_pm = pm;
@@ -228,7 +228,9 @@ setup_sleep_mode(void)
     }
   }
   if (trigger_etimer != RTIMER_CLOCK_MAX) {
-    soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, trigger_etimer);
+    if (trigger_etimer > now) {
+      soc_rtc_schedule_one_shot(SOC_RTC_SYSTEM_CH, trigger_etimer);
+    }
   }
 
   return max_pm;

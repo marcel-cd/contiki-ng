@@ -98,7 +98,6 @@ clock_handler(nrfx_clock_evt_type_t event)
  * @brief Function for handling the RTC<instance> interrupts
  * @param int_type Type of interrupt to be handled
  */
-#include "gpio-hal-arch.h"
 static void
 rtc_handler(nrfx_rtc_int_type_t int_type)
 {
@@ -112,7 +111,6 @@ rtc_handler(nrfx_rtc_int_type_t int_type)
     rtimer_run_next();
     /* We need to handle the compare event */
   } else if(int_type == NRFX_RTC_INT_OVERFLOW) {
-    gpio_hal_arch_toggle_pin(DEBUG2_PORT, DEBUG2_PIN);
     overflow++;
   }
   last_isr_time = soc_rtc_get_rtimer_ticks();
