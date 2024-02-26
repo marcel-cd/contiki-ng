@@ -36,11 +36,9 @@
  * Implementation of the NRF RTC driver
  */
 /*---------------------------------------------------------------------------*/
-#include "clock.h"
 #include "contiki.h"
+#include "clock.h"
 
-#include "gpio-hal-arch.h"
-#include "nrf52840-dk-def.h"
 #include "soc-rtc.h"
 
 #include "etimer.h"
@@ -64,8 +62,8 @@ void clock_update(void);
 #define COMPARE_INCREMENT (RTIMER_SECOND / CLOCK_SECOND)
 #define MULTIPLE_256_MASK 0xFFFFFF00
 /*---------------------------------------------------------------------------*/
-#if CLOCK_SIZE != 8
-#error CLOCK_CONF_SIZE must be 8 (64 bit)
+#if CLOCK_SIZE != 4
+#error CLOCK_CONF_SIZE must be 4 (32 bit)
 #endif
 #if RTIMER_SECOND != 32768
 #error RIMTER_SECOND must be 32768 when using the NRF_RTC

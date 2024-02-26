@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2024 Marcel Graber <marcel@clever.design>
- * Copyright (C) 2020 Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,7 +35,7 @@
  * \addtogroup nrf-sys System drivers
  * @{
  *
- * In lowpoer mode, the RTC needs additional handling to wake up the CPU and
+ * In lowpower mode, the RTC needs additional handling to wake up the CPU and
  * run the rtimer / etimer code. This is done in soc-rtc.c. Therefore, colck-arch.c
  * only needs to handle the software clock.
  *
@@ -45,7 +44,6 @@
  *
  * \author
  *         Marcel Graber <marcel@clever.design> (lowpower mode)
- *         Yago Fontoura do Rosario <yago.rosario@hotmail.com.br>
  *
  */
 /*---------------------------------------------------------------------------*/
@@ -53,7 +51,6 @@
 #include "clock.h"
 #include "contiki.h"
 #include "etimer.h"
-#include "gpio-hal-arch.h"
 #include "nrf-def.h"
 #include "rtimer-arch.h"
 #include "rtimer.h"
@@ -72,23 +69,21 @@
  * Don't consider deep sleep mode if the next RTC event is scheduled to fire
  * in less than STANDBY_MIN_DURATION rtimer ticks
  */
-#define STANDBY_MIN_DURATION  US_TO_RTIMERTICKS(20000) /* 20.0 ms */
+#define STANDBY_MIN_DURATION  US_TO_RTIMERTICKS(10000) /* 10.0 ms */
 
 /* Wake up this much time earlier before the next rtimer */
 /* needed for HFXO power-up and debonce time             */
-#define SLEEP_GUARD_TIME      US_TO_RTIMERTICKS(1500) /* 1.5 ms */
+#define SLEEP_GUARD_TIME      US_TO_RTIMERTICKS(1500) /* 2.0 ms */
 
 /* Maximum allowed sleep-time, must be shorter than watchdog timeout */
 #define MAX_SLEEP_TIME        RTIMER_SECOND
 
 /* Minimal safe sleep-time */
-#define MIN_SAFE_SCHEDULE     US_TO_RTIMERTICKS(10000) /* 10.0 ms */
+#define MIN_SAFE_SCHEDULE     US_TO_RTIMERTICKS(1000) /* 1.0 ms */
 /*---------------------------------------------------------------------------*/
 /* Prototype of a function in clock.c. Called every time we come out of DS */
 void clock_update(void);
 /*---------------------------------------------------------------------------*/
-/* #include "gpio-hal-arch.h" */
-/*   gpio_hal_arch_set_pin(DEBUG1_PORT, DEBUG1_PIN); \ */
 #define assert_wfi()                                                           \
   do {                                                                         \
     __asm("wfi" ::);                                                           \
@@ -203,7 +198,7 @@ setup_sleep_mode(void)
       /* No etimers set. Since by default the CH1 RTC fires once every clock tick,
        * need to explicitly schedule a wakeup in the future to save energy.
        * But do not stay in this mode for too long, otherwise watchdog will be trigerred. */
-      trigger_etimer = next_etimer;
+      trigger_etimer = now + MAX_SLEEP_TIME;
     }
   } else if(max_pm == LPM_MODE_DEEP_SLEEP) {
     /* Watchdog is not enabled, so deep sleep can continue an arbitrary long time.
@@ -222,7 +217,7 @@ setup_sleep_mode(void)
        * No need to compare the `next_etimer` to `now` here as this branch
        * is only entered when there's sufficient time for deep sleeping.
        * keep the trigger_etimer from the step before, if it is earlier */
-      if (RTIMER_CLOCK_LT(next_etimer, trigger_etimer)) {
+      if (RTIMER_CLOCK_LT(next_etimer, trigger_etimer)  || (trigger_etimer == RTIMER_CLOCK_MAX)) {
         trigger_etimer = next_etimer;
       }
     }
