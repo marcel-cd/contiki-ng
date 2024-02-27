@@ -57,6 +57,7 @@
 #include "sys/log.h"
 /* TSCH debug macros, i.e. to set LEDs or GPIOs on various TSCH
  * timeslot events */
+#include "dev/gpio-hal-arch.h"
 #ifndef TSCH_DEBUG_INIT
 #define TSCH_DEBUG_INIT()
 #endif
@@ -70,10 +71,10 @@
 #define TSCH_DEBUG_TX_EVENT()
 #endif
 #ifndef TSCH_DEBUG_SLOT_START
-#define TSCH_DEBUG_SLOT_START()
+#define TSCH_DEBUG_SLOT_START() do {  gpio_hal_arch_set_pin(DEBUG1_PORT, DEBUG1_PIN); } while(0)
 #endif
 #ifndef TSCH_DEBUG_SLOT_END
-#define TSCH_DEBUG_SLOT_END()
+#define TSCH_DEBUG_SLOT_END() do {  gpio_hal_arch_clear_pin(DEBUG1_PORT, DEBUG1_PIN); } while(0)
 #endif
 
 /* Check if TSCH_MAX_INCOMING_PACKETS is power of two */
