@@ -65,6 +65,7 @@
 #include "lpm.h"
 
 #include "nrf.h"
+#include "dev/gpio-hal-arch.h"
 
 /* Only compile the below if NRF_RADIO exists */
 #ifdef NRF_RADIO
@@ -347,6 +348,10 @@ setup_interrupts(void)
 static void
 setup_ppi_timestamping(void)
 {
+  nrfx_gpiote_out_config_t gpiote_cfg = NRFX_GPIOTE_CONFIG_OUT_TASK_TOGGLE(false);
+  uint16_t pin_framestart = NRF_GPIO_PIN_MAP(DEBUG4_PORT, DEBUG4_PIN);
+  nrfx_gpiote_out_init(pin_framestart, &gpiote_cfg);
+  nrfx_gpiote_out_task_enable(pin_framestart);
   nrfx_gppi_channel_endpoints_setup(
     NRF_PPI_FRAMESTART_CHANNEL,
     nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_FRAMESTART),
@@ -357,6 +362,14 @@ setup_ppi_timestamping(void)
     nrf_timer_task_address_get(NRF_RTIMER_TIMER, NRF_TIMER_TASK_CAPTURE2));
   nrfx_gppi_channels_enable(1uL << NRF_PPI_FRAMESTART_CHANNEL
                             | 1uL << NRF_PPI_END_CHANNEL);
+  nrfx_gppi_channel_endpoints_setup(
+    3, nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_FRAMESTART),
+    nrfx_gpiote_out_task_addr_get(pin_framestart));
+  nrfx_gppi_channel_endpoints_setup(
+      4, nrf_radio_event_address_get(NRF_RADIO, NRF_RADIO_EVENT_END),
+      nrfx_gpiote_out_task_addr_get(pin_framestart));
+  nrfx_gppi_channels_enable(1uL << NRF_PPI_FRAMESTART_CHANNEL |
+                             +1uL << NRF_PPI_END_CHANNEL | 1uL << 3 | 1ul << 4);
 }
 /*---------------------------------------------------------------------------*/
 static void

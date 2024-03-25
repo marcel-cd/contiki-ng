@@ -41,6 +41,7 @@
 #define ENERGEST_H_
 
 #include "contiki.h"
+#include "gpio-hal-arch.h"
 
 #ifndef ENERGEST_CONF_ON
 /* Energest is disabled by default */
@@ -136,6 +137,12 @@ energest_type_set(energest_type_t type, uint64_t value)
 static inline void
 energest_on(energest_type_t type)
 {
+  if (type == ENERGEST_TYPE_TRANSMIT) {
+    gpio_hal_arch_set_pin(DEBUG3_PORT, DEBUG3_PIN);
+  }
+  if (type == ENERGEST_TYPE_LISTEN) {
+    gpio_hal_arch_set_pin(DEBUG2_PORT, DEBUG2_PIN);
+  }
   if(energest_current_mode[type] == 0) {
     energest_current_time[type] = ENERGEST_CURRENT_TIME();
     energest_current_mode[type] = 1;
@@ -146,7 +153,13 @@ energest_on(energest_type_t type)
 static inline void
 energest_off(energest_type_t type)
 {
- if(energest_current_mode[type] != 0) {
+  if (type == ENERGEST_TYPE_TRANSMIT) {
+    gpio_hal_arch_clear_pin(DEBUG3_PORT, DEBUG3_PIN);
+  }
+  if (type == ENERGEST_TYPE_LISTEN) {
+    gpio_hal_arch_clear_pin(DEBUG2_PORT, DEBUG2_PIN);
+  }
+  if(energest_current_mode[type] != 0) {
    energest_total_time[type] +=
      (ENERGEST_TIME_T)(ENERGEST_CURRENT_TIME() - energest_current_time[type]);
    energest_current_mode[type] = 0;
@@ -154,9 +167,20 @@ energest_off(energest_type_t type)
 }
 #define ENERGEST_OFF(type) energest_off(type)
 
-static inline void
-energest_switch(energest_type_t type_off, energest_type_t type_on)
-{
+static inline void energest_switch(energest_type_t type_off,
+                                   energest_type_t type_on) {
+  if (type_off == ENERGEST_TYPE_TRANSMIT) {
+    gpio_hal_arch_clear_pin(DEBUG3_PORT, DEBUG3_PIN);
+  }
+  if (type_off == ENERGEST_TYPE_LISTEN) {
+    gpio_hal_arch_clear_pin(DEBUG2_PORT, DEBUG2_PIN);
+  }
+  if (type_on == ENERGEST_TYPE_TRANSMIT) {
+    gpio_hal_arch_set_pin(DEBUG3_PORT, DEBUG3_PIN);
+  }
+  if (type_on == ENERGEST_TYPE_LISTEN) {
+    gpio_hal_arch_set_pin(DEBUG2_PORT, DEBUG2_PIN);
+  }
   ENERGEST_TIME_T energest_local_variable_now = ENERGEST_CURRENT_TIME();
   if(energest_current_mode[type_off] != 0) {
     energest_total_time[type_off] += (ENERGEST_TIME_T)
