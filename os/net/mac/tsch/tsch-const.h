@@ -83,7 +83,7 @@
 
 /* Convert rtimer ticks to clock and vice versa */
 #define TSCH_CLOCK_TO_TICKS(c) (((c) * RTIMER_SECOND) / CLOCK_SECOND)
-#define TSCH_CLOCK_TO_SLOTS(c, timeslot_length) ((TSCH_CLOCK_TO_TICKS(c) + timeslot_length - 1) / timeslot_length)
-
+#define TSCH_CLOCK_TO_SLOTS(c, timeslot_length) \
+    ((uint32_t)((((uint64_t)(c) * RTIMER_SECOND / CLOCK_SECOND) + timeslot_length - 1) / timeslot_length))
 #endif /* TSCH_CONST_H_ */
 /** @} */
