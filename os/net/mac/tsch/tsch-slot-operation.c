@@ -97,6 +97,8 @@
 #if RTIMER_SECOND < (32 * 1024)
 #error "TSCH: RTIMER_SECOND < (32 * 1024)"
 #endif
+/* let the value of RTIMER_GUARD be overridden by a platform-specific definition */
+#ifndef RTIMER_GUARD
 #if CONTIKI_TARGET_COOJA
 /* Use 0 usec guard time for Cooja Mote with a 1 MHz Rtimer*/
 #define RTIMER_GUARD 0u
@@ -104,6 +106,7 @@
 #define RTIMER_GUARD (RTIMER_SECOND / 100000)
 #else
 #define RTIMER_GUARD 2u
+#endif
 #endif
 
 enum tsch_radio_state_on_cmd {
