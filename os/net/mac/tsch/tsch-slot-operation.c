@@ -276,25 +276,23 @@ tsch_calculate_channel(struct tsch_asn_t *asn, uint16_t channel_offset)
 /*---------------------------------------------------------------------------*/
 /* Timing utility functions */
 
-/* Checks if the current time has passed a ref time + offset. Assumes
- * a single overflow and ref time prior to now. */
+/* Checks if the current time has passed ref_time + offset.
+ *
+ * Uses signed-difference (RTIMER_CLOCK_LT) semantics rather than the
+ * upstream "single overflow" heuristic. The upstream version assumed a
+ * narrow rtimer where `now < ref_time` always implied a full wraparound,
+ * and treated any 1-tick backstep as a missed deadline. With a 32-bit
+ * extended rtimer, that heuristic produces false misses when ref_time
+ * is adjusted slightly into the future (e.g. by drift correction after
+ * a received beacon). RTIMER_CLOCK_LT handles ~18 hours of difference
+ * before ambiguity, which is far beyond any practical TSCH deadline.
+ *
+ * Returns true iff target is at-or-before now in signed-diff sense. */
 static uint8_t
 check_timer_miss(rtimer_clock_t ref_time, rtimer_clock_t offset, rtimer_clock_t now)
 {
   rtimer_clock_t target = ref_time + offset;
-  int now_has_overflowed = now < ref_time;
-  int target_has_overflowed = target < ref_time;
-
-  if(now_has_overflowed == target_has_overflowed) {
-    /* Both or none have overflowed, just compare now to the target */
-    return target <= now;
-  } else {
-    /* Either now or target of overflowed.
-     * If it is now, then it has passed the target.
-     * If it is target, then we haven't reached it yet.
-     *  */
-    return now_has_overflowed;
-  }
+  return !RTIMER_CLOCK_LT(now, target);
 }
 /*---------------------------------------------------------------------------*/
 /* Schedule a wakeup at a specified offset from a reference time.
