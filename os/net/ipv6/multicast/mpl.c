@@ -1253,7 +1253,13 @@ seed_present:
 
       /* There is no overlap in message sets */
       if(r > vector_len || locmmptr == NULL) {
-        LOG_WARN("Seed sets of local and remote have no overlap.\n");
+        /* Downgraded from LOG_WARN by the Zephyr port: this fires
+         * when one node has evicted seeds the other still tracks
+         * (sized via MPL_CONF_SEED_SET_SIZE). With the bumped pool
+         * sizes in our contiki-conf.h it should now be very rare,
+         * and even when it does occur it is an internal MPL state
+         * event, not an actionable application error. */
+        LOG_DBG("Seed sets of local and remote have no overlap.\n");
         /* Work out who is behind who */
         locmmptr = list_head(locssptr->min_seq);
         while(list_item_next(locmmptr) != NULL) {
@@ -1415,7 +1421,11 @@ accept(uint8_t in)
 #endif
 
   if(uip_ds6_is_my_addr(&UIP_IP_BUF->srcipaddr) && in == MPL_DGRAM_IN) {
-    LOG_WARN("Received message from ourselves.\n");
+    /* Downgraded from LOG_WARN by the Zephyr port: this fires
+     * after some MPL state churn (e.g. RPL local-repair) when a
+     * forwarder briefly echoes our own multicast back to us. The
+     * frame is correctly dropped here — it is purely informational. */
+    LOG_DBG("Received message from ourselves.\n");
     return UIP_MCAST6_DROP;
   }
 
