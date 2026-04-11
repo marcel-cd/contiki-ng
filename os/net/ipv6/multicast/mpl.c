@@ -1648,7 +1648,12 @@ out(void)
   if(local_seed_id.s == MPL_SEED_ID_UNKNOWN) {
     update_seed_id();
     if(local_seed_id.s == MPL_SEED_ID_UNKNOWN) {
-      LOG_ERR("Our seed ID is not yet known.\n");
+      /* Downgraded from LOG_ERR by the Zephyr port: this fires
+       * during normal startup for any multicast send that happens
+       * before the first DIO with prefix info has been processed
+       * (the seed id is derived from the global address). It is
+       * informational, not an error. */
+      LOG_DBG("Our seed ID is not yet known.\n");
       goto drop;
     }
   }
