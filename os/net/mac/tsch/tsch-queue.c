@@ -137,6 +137,18 @@ tsch_queue_get_nbr_address(const struct tsch_neighbor *n)
   return nbr_table_get_lladdr(tsch_neighbors, n);
 }
 /*---------------------------------------------------------------------------*/
+struct tsch_neighbor *
+tsch_queue_first_nbr(void)
+{
+  return (struct tsch_neighbor *)nbr_table_head(tsch_neighbors);
+}
+/*---------------------------------------------------------------------------*/
+struct tsch_neighbor *
+tsch_queue_next_nbr(struct tsch_neighbor *prev)
+{
+  return (struct tsch_neighbor *)nbr_table_next(tsch_neighbors, prev);
+}
+/*---------------------------------------------------------------------------*/
 /* Update TSCH time source */
 int
 tsch_queue_update_time_source(const linkaddr_t *new_addr)

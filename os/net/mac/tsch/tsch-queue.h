@@ -67,6 +67,21 @@ struct tsch_neighbor *tsch_queue_add_nbr(const linkaddr_t *addr);
  */
 struct tsch_neighbor *tsch_queue_get_nbr(const linkaddr_t *addr);
 /**
+ * \brief Iterate the TSCH neighbor table — get the head.
+ * \return The first neighbor, or NULL if the table is empty.
+ *
+ * Pair with tsch_queue_next_nbr(). Visits *every* entry, including the
+ * broadcast pseudo-neighbors (n_broadcast / n_eb); callers that want
+ * unicast peers should compare addresses against linkaddr_null.
+ */
+struct tsch_neighbor *tsch_queue_first_nbr(void);
+/**
+ * \brief Iterate the TSCH neighbor table — advance.
+ * \param prev The neighbor returned by the previous call.
+ * \return The next neighbor, or NULL at end of table.
+ */
+struct tsch_neighbor *tsch_queue_next_nbr(struct tsch_neighbor *prev);
+/**
  * \brief Get the TSCH time source (we currently assume there is only one)
  * \return The neighbor queue associated to the time source
  */
