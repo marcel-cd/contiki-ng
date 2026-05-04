@@ -60,6 +60,11 @@ extern clock_time_t tsch_last_sync_time;
 /* Counts the length of the current burst */
 extern int tsch_current_burst_count;
 
+/* Start of the current slot in rtimer ticks. Exported so radio drivers
+ * can compute a TimeCorrectionIE for an in-flight inbound frame from
+ * interrupt context (e.g. gecko/RAIL Enhanced-ACK fast-path). */
+extern rtimer_clock_t volatile current_slot_start;
+
 /********** Functions *********/
 
 /**

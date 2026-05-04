@@ -1021,8 +1021,14 @@ tsch_init(void)
   }
   /* Disable radio in frame filtering */
   radio_rx_mode &= ~RADIO_RX_MODE_ADDRESS_FILTER;
-  /* Unset autoack */
+#if !TSCH_HW_AUTOACK
+  /* Unset autoack — TSCH normally drives the eack manually from
+   * tsch_rx_slot. With TSCH_HW_AUTOACK enabled the radio driver builds
+   * the Enhanced ACK in hardware (e.g. RAIL_IEEE802154_WriteEnhAck on
+   * EFR32), so we keep whatever autoack state the platform configured
+   * at init. */
   radio_rx_mode &= ~RADIO_RX_MODE_AUTOACK;
+#endif
   /* Set radio in poll mode */
   radio_rx_mode |= RADIO_RX_MODE_POLL_MODE;
   if(NETSTACK_RADIO.set_value(RADIO_PARAM_RX_MODE, radio_rx_mode) != RADIO_RESULT_OK) {

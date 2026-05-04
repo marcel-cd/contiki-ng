@@ -146,8 +146,13 @@ static int32_t drift_correction = 0;
 /* Is drift correction used? (Can be true even if drift_correction == 0) */
 static uint8_t is_drift_correction_used;
 
-/* Used from tsch_slot_operation and sub-protothreads */
-static rtimer_clock_t volatile current_slot_start;
+/* Used from tsch_slot_operation and sub-protothreads.
+ * Exported (no `static`) so radio drivers can compute drift estimates
+ * for the in-flight inbound frame from interrupt context — used by the
+ * gecko/RAIL Enhanced-ACK callback to populate the TimeCorrectionIE
+ * before RAIL transmits the auto-ACK. Pure read-side use; only
+ * tsch-slot-operation.c writes to it. */
+rtimer_clock_t volatile current_slot_start;
 
 /* Are we currently inside a slot? */
 static volatile int tsch_in_slot_operation = 0;
@@ -919,7 +924,9 @@ PT_THREAD(tsch_rx_slot(struct pt *pt, struct rtimer *t))
           if((linkaddr_cmp(&destination_address, &linkaddr_node_addr)
                || linkaddr_cmp(&destination_address, &linkaddr_null))
              && !linkaddr_cmp(&source_address, &linkaddr_node_addr)) {
+#if !TSCH_HW_AUTOACK
             int do_nack = 0;
+#endif
             rx_count++;
             estimated_drift = RTIMER_CLOCK_DIFF(expected_rx_time, rx_start_time);
             tsch_stats_on_time_synchronization(estimated_drift);
@@ -935,6 +942,7 @@ PT_THREAD(tsch_rx_slot(struct pt *pt, struct rtimer *t))
             }
 #endif
 
+#if !TSCH_HW_AUTOACK
 #ifdef TSCH_CALLBACK_DO_NACK
             if(frame.fcf.ack_required) {
               do_nack = TSCH_CALLBACK_DO_NACK(current_link,
@@ -972,6 +980,17 @@ PT_THREAD(tsch_rx_slot(struct pt *pt, struct rtimer *t))
                 burst_link_scheduled = tsch_packet_get_frame_pending(current_input->payload, current_input->len);
               }
             }
+#else /* TSCH_HW_AUTOACK */
+            /* Hardware sent (or attempted) the Enhanced ACK in-band via
+             * its auto-ACK pipeline (e.g. RAIL_IEEE802154_WriteEnhAck on
+             * EFR32). TSCH stays out of the ACK TX path here so we don't
+             * double-TX. burst_link_scheduled stays whatever it was —
+             * frame-pending detection follows the regular RX flow if the
+             * radio driver populates current_input->payload's bit. */
+            if(frame.fcf.ack_required) {
+              burst_link_scheduled = tsch_packet_get_frame_pending(current_input->payload, current_input->len);
+            }
+#endif /* !TSCH_HW_AUTOACK */
 
             /* If the sender is a time source, proceed to clock drift compensation */
             n = tsch_queue_get_nbr(&source_address);

@@ -436,6 +436,17 @@ by default, useful in case of duplicate seqno */
 #define TSCH_HW_FRAME_FILTERING 1
 #endif /* TSCH_CONF_HW_FRAME_FILTERING */
 
+/* HW Enhanced-ACK enabled — when set, the radio driver / hardware
+ * builds and TXes the FrameVersion=2 Enhanced ACK (with TimeCorrectionIE)
+ * for inbound unicasts, and tsch_rx_slot's manual eack TX is suppressed
+ * to avoid a double-ACK on air. Used by the gecko/RAIL port; the
+ * cc2538 / nrf52 / nrf54 ports keep the manual-eack default (0). */
+#ifdef TSCH_CONF_HW_AUTOACK
+#define TSCH_HW_AUTOACK TSCH_CONF_HW_AUTOACK
+#else /* TSCH_CONF_HW_AUTOACK */
+#define TSCH_HW_AUTOACK 0
+#endif /* TSCH_CONF_HW_AUTOACK */
+
 /* Keep radio always on within TSCH timeslot (1) or turn it off between packet and ACK? (0) */
 #ifdef TSCH_CONF_RADIO_ON_DURING_TIMESLOT
 #define TSCH_RADIO_ON_DURING_TIMESLOT TSCH_CONF_RADIO_ON_DURING_TIMESLOT
