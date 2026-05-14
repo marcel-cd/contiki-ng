@@ -86,12 +86,20 @@ static void handle_state_update(void *ptr);
 static struct ctimer dis_timer; /* Not part of a DAG because when not joined */
 static struct ctimer periodic_timer; /* Not part of a DAG because used for general state maintenance */
 
+/* See rpl_timers_set_suppressed() in rpl-timers.h. When true, every
+ * periodic-timer entry point becomes a no-op and the periodic timers
+ * stay stopped. Used by the CoJP pledge mode. */
+static bool s_suppressed = false;
+
 /*---------------------------------------------------------------------------*/
 /*------------------------------- DIS -------------------------------------- */
 /*---------------------------------------------------------------------------*/
 void
 rpl_timers_schedule_periodic_dis(void)
 {
+  if(s_suppressed) {
+    return;
+  }
   if(ctimer_expired(&dis_timer)) {
     clock_time_t expiration_time = RPL_DIS_INTERVAL / 2 + (random_rand() % (RPL_DIS_INTERVAL));
     ctimer_set(&dis_timer, expiration_time, handle_dis_timer, NULL);
@@ -101,6 +109,9 @@ rpl_timers_schedule_periodic_dis(void)
 static void
 handle_dis_timer(void *ptr)
 {
+  if(s_suppressed) {
+    return;
+  }
   if(!rpl_dag_root_is_root() &&
      (!curr_instance.used ||
        curr_instance.dag.preferred_parent == NULL ||
@@ -504,13 +515,36 @@ rpl_timers_schedule_leaving(void)
 void
 rpl_timers_init(void)
 {
+  if(s_suppressed) {
+    return;
+  }
   ctimer_set(&periodic_timer, PERIODIC_DELAY, handle_periodic_timer, NULL);
   rpl_timers_schedule_periodic_dis();
+}
+/*---------------------------------------------------------------------------*/
+void
+rpl_timers_set_suppressed(bool suppress)
+{
+  s_suppressed = suppress;
+  if(suppress) {
+    /* Stop the two not-part-of-a-DAG timers so they don't fire one
+     * last time before the gate catches them. DAG-instance timers
+     * (DIO/DAO/etc.) are stopped via rpl_timers_stop_dag_timers()
+     * by callers that hold a DAG instance — pledge mode has none. */
+    ctimer_stop(&dis_timer);
+    ctimer_stop(&periodic_timer);
+  } else {
+    /* Resuming — re-arm what rpl_timers_init() would have. */
+    rpl_timers_init();
+  }
 }
 /*---------------------------------------------------------------------------*/
 static void
 handle_periodic_timer(void *ptr)
 {
+  if(s_suppressed) {
+    return;
+  }
   if(curr_instance.used) {
     rpl_dag_periodic(PERIODIC_DELAY_SECONDS);
     uip_sr_periodic(PERIODIC_DELAY_SECONDS);

@@ -147,6 +147,29 @@ unsigned int tsch_security_parse_frame(const uint8_t *hdr, int hdrlen,
 void tsch_security_set_packetbuf_attr(uint8_t frame_type);
 
 /**
+ * \brief Force the next outgoing data frame(s) to be transmitted unsecured
+ *        (FCF.security_enabled = 0) regardless of tsch_is_pan_secured.
+ *
+ * Required for the CoJP (RFC 9031) pledge-to-Join-Proxy path: factory-
+ * fresh pledges hold no K2 yet, so their Join_Request unicasts must
+ * leave the radio with no aux security header. Mirror-side, a Join Proxy
+ * forwarding a Join_Response back down to the pledge must also emit
+ * unsecured.
+ *
+ * Semantics: while the flag is `true`, every call to
+ * tsch_security_set_packetbuf_attr(FRAME802154_DATAFRAME) — both in
+ * tsch.c:send_packet() and tsch.c:max_payload() — leaves
+ * PACKETBUF_ATTR_SECURITY_LEVEL at 0. The flag is sticky; the caller
+ * (typically the API shim wrapping simple_udp_sendto) is responsible
+ * for clearing it after the send completes, so it spans any 6LoWPAN
+ * fragmentation that turns one IPv6 datagram into multiple L2 frames.
+ *
+ * EB and ACK frames are unaffected — those keep their normal security
+ * (TSCH_SECURITY_KEY_SEC_LEVEL_EB / ACK).
+ */
+void tsch_security_force_next_unsecured(bool on);
+
+/**
  * \brief Install an AES-128 key at runtime into the TSCH key store.
  *
  * Symmetric to the build-time TSCH_SECURITY_K1 / TSCH_SECURITY_K2

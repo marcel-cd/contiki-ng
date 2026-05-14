@@ -78,6 +78,23 @@ void rpl_timers_init(void);
 void rpl_timers_stop_dag_timers(void);
 
 /**
+ * Runtime suppression of all RPL periodic activity (DIS solicitation and
+ * the general periodic state-maintenance timer). Used by the CoJP pledge
+ * path: a factory-fresh node has no fleet K2 and therefore can't decrypt
+ * any DIO/DAO traffic — running RPL is pointless and the constant DIS
+ * broadcast is noise. The node still uses TSCH for sync + Component C
+ * unsecured unicasts; RPL just stays inert until the Join_Response
+ * commits real keys and the node reboots.
+ *
+ * When `suppress == true`: stops `dis_timer` and `periodic_timer` and
+ * makes every future `rpl_timers_schedule_periodic_dis()` /
+ * `handle_dis_timer` / `handle_periodic_timer` invocation a no-op.
+ * When `suppress == false`: clears the flag and re-arms the periodic
+ * machinery via `rpl_timers_init()`-equivalent paths.
+ */
+void rpl_timers_set_suppressed(bool suppress);
+
+/**
  * Reset DIO Trickle timer
  *
  * \param str A textual description of caused the DIO timer reset

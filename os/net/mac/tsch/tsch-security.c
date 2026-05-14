@@ -316,6 +316,17 @@ tsch_security_parse_frame(const uint8_t *hdr, int hdrlen, int datalen,
   }
 }
 /*---------------------------------------------------------------------------*/
+/* CoJP pledge / JP support — see tsch_security_force_next_unsecured() in
+ * tsch-security.h. Sticky flag, cleared by the caller after the higher-
+ * layer send returns. */
+static volatile bool s_force_next_unsecured = false;
+
+void
+tsch_security_force_next_unsecured(bool on)
+{
+  s_force_next_unsecured = on;
+}
+/*---------------------------------------------------------------------------*/
 void
 tsch_security_set_packetbuf_attr(uint8_t frame_type)
 {
@@ -336,6 +347,16 @@ tsch_security_set_packetbuf_attr(uint8_t frame_type)
         packetbuf_set_attr(PACKETBUF_ATTR_KEY_INDEX, TSCH_SECURITY_KEY_INDEX_EB);
         break;
       default:
+        if(s_force_next_unsecured) {
+          /* CoJP override — leave FCF.security_enabled = 0 on the wire.
+           * packetbuf_clear() (in sicslowpan_output / NETSTACK_MAC.send
+           * path) zeroed PACKETBUF_ATTR_SECURITY_LEVEL already; setting
+           * it again to 0 is defensive. */
+          packetbuf_set_attr(PACKETBUF_ATTR_SECURITY_LEVEL, 0);
+          packetbuf_set_attr(PACKETBUF_ATTR_KEY_ID_MODE, 0);
+          packetbuf_set_attr(PACKETBUF_ATTR_KEY_INDEX, 0);
+          break;
+        }
         packetbuf_set_attr(PACKETBUF_ATTR_SECURITY_LEVEL, TSCH_SECURITY_KEY_SEC_LEVEL_OTHER);
         packetbuf_set_attr(PACKETBUF_ATTR_KEY_ID_MODE, FRAME802154_1_BYTE_KEY_ID_MODE);
         packetbuf_set_attr(PACKETBUF_ATTR_KEY_INDEX, TSCH_SECURITY_KEY_INDEX_OTHER);
