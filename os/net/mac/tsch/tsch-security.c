@@ -114,9 +114,31 @@ tsch_security_check_level(const frame802154_t *frame)
   }
 
   /* Non-secured frame, ok iff we are not in a secured PAN
-   * (i.e. scanning or associated to a non-secured PAN) */
+   * (i.e. scanning or associated to a non-secured PAN). */
   if(frame->fcf.security_enabled == 0) {
-    return !(tsch_is_associated == 1 && tsch_is_pan_secured == 1);
+    if(tsch_is_associated == 1 && tsch_is_pan_secured == 1) {
+      /* 6TiSCH Constrained Join Protocol (RFC 9031): factory-fresh
+       * pledges send their Join Request with security_enabled=0
+       * because they don't yet have a K2. The Join Proxy (the
+       * gateway here, or a joined leaf acting as JP-N for distant
+       * pledges) must accept unsecured unicasts addressed to itself
+       * so the application-layer cojp_relay can shuttle the OSCORE
+       * payload to the JRC.
+       *
+       * Trust gate stays at OSCORE: the inner payload is
+       * end-to-end-protected under PSK_JRC, so accepting unsecured
+       * here doesn't extend trust to the sender — it just lets the
+       * application decide. Broadcasts and frames addressed to
+       * someone else stay rejected; we don't want to be a sink for
+       * arbitrary unsecured traffic. */
+      if(frame->fcf.dest_addr_mode == FRAME802154_LONGADDRMODE &&
+         linkaddr_cmp((const linkaddr_t *)frame->dest_addr,
+                      &linkaddr_node_addr)) {
+        return 1;
+      }
+      return 0;
+    }
+    return 1;
   }
 
   /* The frame is secured, that we are not in an unsecured PAN */
