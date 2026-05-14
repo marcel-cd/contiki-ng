@@ -92,7 +92,7 @@ tsch_packet_eackbuf_attr(uint8_t type)
 int
 tsch_packet_create_eack(uint8_t *buf, uint16_t buf_len,
                         const linkaddr_t *dest_addr, uint8_t seqno,
-                        int16_t drift, int nack)
+                        int16_t drift, int nack, uint8_t secured)
 {
   frame802154_t params;
   struct ieee802154_ies ies;
@@ -124,7 +124,15 @@ tsch_packet_create_eack(uint8_t *buf, uint16_t buf_len,
 #endif
 
 #if LLSEC802154_ENABLED
-  tsch_security_set_packetbuf_attr(FRAME802154_ACKFRAME);
+  /* Mirror the inbound data frame's security level. CoJP pledges have
+   * no keys (no K1, no K2) and send unsecured Join Requests; the ACK
+   * must also be unsecured or the pledge rejects with `!failed to
+   * authenticate ACK`. The eackbuf_attrs[] was zeroed above, so leaving
+   * PACKETBUF_ATTR_SECURITY_LEVEL untouched is exactly the unsecured
+   * case the framer needs. */
+  if(secured) {
+    tsch_security_set_packetbuf_attr(FRAME802154_ACKFRAME);
+  }
 #endif /* LLSEC802154_ENABLED */
 
   framer_802154_setup_params(tsch_packet_eackbuf_attr, 0, &params);

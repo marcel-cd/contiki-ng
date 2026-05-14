@@ -121,22 +121,20 @@ tsch_security_check_level(const frame802154_t *frame)
        * pledges send their Join Request with security_enabled=0
        * because they don't yet have a K2. The Join Proxy (the
        * gateway here, or a joined leaf acting as JP-N for distant
-       * pledges) must accept unsecured unicasts addressed to itself
-       * so the application-layer cojp_relay can shuttle the OSCORE
-       * payload to the JRC.
+       * pledges) must accept unsecured DATA unicasts so the
+       * application-layer cojp_relay can shuttle the OSCORE payload
+       * to the JRC.
        *
        * Trust gate stays at OSCORE: the inner payload is
        * end-to-end-protected under PSK_JRC, so accepting unsecured
        * here doesn't extend trust to the sender — it just lets the
-       * application decide. Broadcasts and frames addressed to
-       * someone else stay rejected; we don't want to be a sink for
-       * arbitrary unsecured traffic. */
-      if(frame->fcf.dest_addr_mode == FRAME802154_LONGADDRMODE &&
-         linkaddr_cmp((const linkaddr_t *)frame->dest_addr,
-                      &linkaddr_node_addr)) {
-        return 1;
-      }
-      return 0;
+       * application decide. The RAIL HW filter has already validated
+       * that the destination matches our PAN + linkaddr by the time
+       * the frame reaches this check, so we don't need to re-check
+       * addressing here. Broadcasts and beacons (other frame types)
+       * stay rejected: only DATA frames carrying CoJP/OSCORE payload
+       * pass. */
+      return frame->fcf.frame_type == FRAME802154_DATAFRAME;
     }
     return 1;
   }

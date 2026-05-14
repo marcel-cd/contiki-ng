@@ -56,11 +56,17 @@
  * \param seqno The sequence number we are ACKing
  * \param drift The time offset in usec measured at Rx of the packer we are ACKing
  * \param nack Value of the NACK bit
+ * \param secured 1 if the inbound data frame had FCF.security_enabled=1 and
+ *                the ACK should mirror that (default TSCH behavior). 0 if the
+ *                inbound was unsecured (e.g. a CoJP pledge with no keys yet) —
+ *                in which case the ACK must also be unsecured, otherwise the
+ *                pledge sees `!failed to authenticate ACK` and the TX is
+ *                marked NO_ACK even though the gateway received it.
  * \return The length of the packet that was created. -1 if failure.
  */
 int tsch_packet_create_eack(uint8_t *buf, uint16_t buf_size,
                             const linkaddr_t *dest_addr, uint8_t seqno,
-                            int16_t drift, int nack);
+                            int16_t drift, int nack, uint8_t secured);
 /**
  * \brief Parse enhanced ACK packet
  * \param buf The buffer where to parse the EACK from

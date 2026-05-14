@@ -954,14 +954,21 @@ PT_THREAD(tsch_rx_slot(struct pt *pt, struct rtimer *t))
               static uint8_t ack_buf[TSCH_PACKET_MAX_LEN];
               static int ack_len;
 
-              /* Build ACK frame */
+              /* Build ACK frame. The `secured` argument mirrors the
+               * inbound frame's L2 security so a CoJP pledge (which has
+               * no K2 and sends unsecured Join Requests) gets an
+               * unsecured ACK in return; without this it would reject
+               * the K2-MIC ACK as "failed to authenticate ACK" and the
+               * gateway's auto-Enh-ACK pipeline would silently fail. */
               ack_len = tsch_packet_create_eack(ack_buf, sizeof(ack_buf),
-                  &source_address, frame.seq, (int16_t)RTIMERTICKS_TO_US(estimated_drift), do_nack);
+                  &source_address, frame.seq, (int16_t)RTIMERTICKS_TO_US(estimated_drift), do_nack,
+                  frame.fcf.security_enabled);
 
               if(ack_len > 0) {
 #if LLSEC802154_ENABLED
-                if(tsch_is_pan_secured) {
-                  /* Secure ACK frame. There is only header and header IEs, therefore data len == 0. */
+                if(tsch_is_pan_secured && frame.fcf.security_enabled) {
+                  /* Secure ACK frame only when the inbound was secured;
+                   * unsecured ACKs (CoJP pledge path) carry no MIC. */
                   ack_len += tsch_security_secure_frame(ack_buf, ack_buf, ack_len, 0, &tsch_current_asn);
                 }
 #endif /* LLSEC802154_ENABLED */
