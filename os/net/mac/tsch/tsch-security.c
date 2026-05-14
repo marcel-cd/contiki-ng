@@ -60,12 +60,34 @@
 /* The two keys K1 and K2 from 6TiSCH minimal configuration
  * K1: well-known, used for EBs
  * K2: secret, used for data and ACK
- * */
+ *
+ * No longer `const` — runtime callers (gateway-efr fleet_config,
+ * klikk-zephyr provisioning blob commit) overwrite slot K2 with the
+ * per-tenant fleet key once the cloud has issued one. K1 stays as
+ * compiled (the IETF 6TiSCH-minimal well-known constant; baking it
+ * in is the standard pattern). See tsch_security_set_key() below.
+ */
 static aes_key keys[] = {
   TSCH_SECURITY_K1,
   TSCH_SECURITY_K2
 };
 #define N_KEYS (sizeof(keys) / sizeof(aes_key))
+
+/*---------------------------------------------------------------------------*/
+int
+tsch_security_set_key(uint8_t key_index, const uint8_t key[16])
+{
+  if(key == NULL) {
+    return -1;
+  }
+  /* IEEE key_index is 1-based and 0 means "unsecured"; map to the
+   * 0-based array slot. */
+  if(key_index < 1 || key_index > N_KEYS) {
+    return -1;
+  }
+  memcpy(keys[key_index - 1], key, sizeof(aes_key));
+  return 0;
+}
 
 /*---------------------------------------------------------------------------*/
 static void

@@ -146,5 +146,23 @@ unsigned int tsch_security_parse_frame(const uint8_t *hdr, int hdrlen,
  */
 void tsch_security_set_packetbuf_attr(uint8_t frame_type);
 
+/**
+ * \brief Install an AES-128 key at runtime into the TSCH key store.
+ *
+ * Symmetric to the build-time TSCH_SECURITY_K1 / TSCH_SECURITY_K2
+ * macros, but settable per-node after boot. Used by per-tenant
+ * fleet bonding (gateway-efr's fleet_config; klikk-zephyr's
+ * provisioning-blob commit) to overwrite slot K2 with the
+ * cloud-issued fleet key once it arrives.
+ *
+ * \param key_index  IEEE 802.15.4 key index, 1-based.
+ *                   1 = K1 (EB; well-known), 2 = K2 (data/ACK).
+ * \param key        16 bytes of AES-128 key material. Copied
+ *                   into the internal store; safe to free after.
+ * \return 0 on success, -1 if key_index is out of range or
+ *         key is NULL.
+ */
+int tsch_security_set_key(uint8_t key_index, const uint8_t key[16]);
+
 #endif /* TSCH_SECURITY_H_ */
 /** @} */
