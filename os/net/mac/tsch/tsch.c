@@ -563,7 +563,19 @@ tsch_tx_process_pending(void)
 static void
 tsch_start_coordinator(void)
 {
-  frame802154_set_pan_id(IEEE802154_PANID);
+  /* Preserve a runtime-configured PAN if the platform staged one before
+   * tsch_process resumed into this function. Upstream unconditionally
+   * overwrites mac_pan_id with the compile-time IEEE802154_PANID macro,
+   * but downstream Zephyr ports (gateway-efr fleet_config, klikk-zephyr
+   * provisioning) set the PAN per-deployment via frame802154_set_pan_id
+   * earlier in the init sequence. tsch_reset() — called from tsch_init
+   * just before turn_on() starts tsch_process — leaves mac_pan_id at
+   * FRAME802154_BROADCASTPANDID (0xFFFF), so the sentinel cleanly
+   * distinguishes "platform staged a PAN, keep it" from "no PAN staged,
+   * apply the Kconfig default". */
+  if(frame802154_get_pan_id() == FRAME802154_BROADCASTPANDID) {
+    frame802154_set_pan_id(IEEE802154_PANID);
+  }
   /* Initialize hopping sequence as default */
   memcpy(tsch_hopping_sequence, TSCH_DEFAULT_HOPPING_SEQUENCE, sizeof(TSCH_DEFAULT_HOPPING_SEQUENCE));
   TSCH_ASN_DIVISOR_INIT(tsch_hopping_sequence_length, sizeof(TSCH_DEFAULT_HOPPING_SEQUENCE));
