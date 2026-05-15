@@ -102,6 +102,15 @@ tsch_security_init_nonce(uint8_t *nonce,
   nonce[12] = (asn->ls4b) & 0xff;
 }
 /*---------------------------------------------------------------------------*/
+/* CoJP pledge-mode flags — see tsch-security.h for the public setters
+ * tsch_security_force_next_unsecured() and tsch_security_set_pledge_mode().
+ * Forward-declared here so tsch_security_check_level() and
+ * tsch_security_parse_frame() (defined further down) can read them; the
+ * setters themselves live near the end of the file with the rest of the
+ * CoJP pledge support helpers. */
+static volatile bool s_force_next_unsecured;
+static volatile bool s_pledge_mode;
+/*---------------------------------------------------------------------------*/
 static int
 tsch_security_check_level(const frame802154_t *frame)
 {
@@ -282,6 +291,16 @@ tsch_security_parse_frame(const uint8_t *hdr, int hdrlen, int datalen,
     return 1;
   }
 
+  /* CoJP pledge: accept EBs without MIC verification. The pledge only
+   * has the compiled-in placeholder K1 — the gateway signs its EBs with
+   * the per-tenant K1, so MIC verify would always fail. The EB body
+   * (sec-level=1 = MIC-32 only, no encryption) is readable plaintext;
+   * pledge syncs on the timing/slotframe info and lets OSCORE filter
+   * out malicious EBs at the Join_Request/Response step. */
+  if(s_pledge_mode && frame->fcf.frame_type == FRAME802154_BEACONFRAME) {
+    return 1;
+  }
+
   key_index = frame->aux_hdr.key_index;
   security_level = frame->aux_hdr.security_control.security_level;
   with_encryption = (security_level & 0x4) ? 1 : 0;
@@ -324,13 +343,26 @@ tsch_security_parse_frame(const uint8_t *hdr, int hdrlen, int datalen,
 /*---------------------------------------------------------------------------*/
 /* CoJP pledge / JP support — see tsch_security_force_next_unsecured() in
  * tsch-security.h. Sticky flag, cleared by the caller after the higher-
- * layer send returns. */
-static volatile bool s_force_next_unsecured = false;
-
+ * layer send returns. (Storage declared at the top of the file so the
+ * receive-path code can read it without a forward-reference issue.) */
 void
 tsch_security_force_next_unsecured(bool on)
 {
   s_force_next_unsecured = on;
+}
+
+/* CoJP pledge — when set, EB MIC verification is bypassed. A pledge has no
+ * fleet K1 yet (only the compiled-in placeholder), so MIC-checking gateway
+ * EBs that are signed under the per-tenant K1 always fails. Per RFC 9031 /
+ * the Klikk CoJP architecture doc, the pledge syncs on the EB body
+ * (plaintext, EB sec-level=1 = MIC-32 only) and trusts the OSCORE layer
+ * to filter out malicious EBs at the Join_Request/Response step. Cleared
+ * by the caller once the leaf installs fleet K1+K2 from the provisioning
+ * blob. */
+void
+tsch_security_set_pledge_mode(bool on)
+{
+  s_pledge_mode = on;
 }
 /*---------------------------------------------------------------------------*/
 void

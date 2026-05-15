@@ -170,6 +170,32 @@ void tsch_security_set_packetbuf_attr(uint8_t frame_type);
 void tsch_security_force_next_unsecured(bool on);
 
 /**
+ * \brief Toggle CoJP pledge mode for EB MIC verification.
+ *
+ * When `on`, tsch_security_parse_frame() bypasses MIC verification for
+ * Enhanced Beacons (FRAME802154_BEACONFRAME) and returns success
+ * regardless of the MIC bytes. The EB body (sec-level=1, MIC-32 only,
+ * no encryption) stays plaintext-readable so the pledge can still sync
+ * on the timing IEs and capture the EB source as a candidate Join
+ * Proxy.
+ *
+ * Why: a factory-fresh pledge has only the compiled-in placeholder K1.
+ * The gateway signs its EBs with the per-tenant K1 it received from
+ * the cloud, so MIC verify against the placeholder always fails. Per
+ * RFC 9031 and the Klikk CoJP architecture (proto/docs/
+ * cojp-oscore-architecture.md §"EB security"), the pledge does not
+ * need to authenticate EBs — a maliciously-injected EB will simply
+ * fail at the OSCORE step when the pledge tries its Join_Request
+ * against the wrong gateway, so trust is anchored at OSCORE rather
+ * than at the L2 EB MIC.
+ *
+ * Callers MUST clear the flag (`on = false`) once they have installed
+ * fleet K1+K2 from the provisioning blob, so subsequent EBs are
+ * properly MIC-verified.
+ */
+void tsch_security_set_pledge_mode(bool on);
+
+/**
  * \brief Install an AES-128 key at runtime into the TSCH key store.
  *
  * Symmetric to the build-time TSCH_SECURITY_K1 / TSCH_SECURITY_K2
