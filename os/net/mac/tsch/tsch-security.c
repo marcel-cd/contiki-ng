@@ -131,10 +131,18 @@ tsch_security_check_level(const frame802154_t *frame)
        * application decide. The RAIL HW filter has already validated
        * that the destination matches our PAN + linkaddr by the time
        * the frame reaches this check, so we don't need to re-check
-       * addressing here. Broadcasts and beacons (other frame types)
-       * stay rejected: only DATA frames carrying CoJP/OSCORE payload
-       * pass. */
-      return frame->fcf.frame_type == FRAME802154_DATAFRAME;
+       * addressing here.
+       *
+       * Accept both DATA and ACK frames unsecured: pledges send the
+       * Join Request as DATA (FRAME802154_DATAFRAME) and reply to our
+       * unsecured downlink with an unsecured Enh-ACK (FRAME802154_ACKFRAME)
+       * per 802.15.4-2015 — mirroring the data frame's security level.
+       * Without the ACK case the gateway logs "!failed to authenticate
+       * ACK" on every downlink to a pledge and marks its own TX as
+       * NO_ACK even though the pledge accepted the frame and replied.
+       * Beacons (EBs) and MAC command frames stay rejected unsecured. */
+      return frame->fcf.frame_type == FRAME802154_DATAFRAME ||
+             frame->fcf.frame_type == FRAME802154_ACKFRAME;
     }
     return 1;
   }
