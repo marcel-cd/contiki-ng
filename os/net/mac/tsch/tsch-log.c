@@ -74,16 +74,33 @@ tsch_log_process_pending(void)
   int16_t log_index;
   /* Loop on accessing (without removing) a pending input packet */
   if(log_dropped != last_log_dropped) {
-    printf("[WARN: TSCH-LOG  ] logs dropped %u\n", log_dropped);
+    /* Ring-overflow event — always WRN, not part of a normal slot
+     * line. The `[WARN: TSCH-LOG  ]` prefix the upstream printed has
+     * been dropped because the Zephyr-side LOG_WRN macro already
+     * renders as `<wrn> contiki:` in the bridge output. */
+    contiki_log_bridge_line_level(_CTK_LVL_WRN);
+    LOG_OUTPUT("logs dropped %u\n", log_dropped);
     last_log_dropped = log_dropped;
   }
   while((log_index = ringbufindex_peek_get(&log_ringbuf)) != -1) {
     struct tsch_log_t *log = &log_array[log_index];
+
+    /* Decide the line level once, BEFORE any fragment is emitted —
+     * the bridge accumulates per-level, so mixing INF and WRN
+     * fragments within the same logical line would split it across
+     * two Zephyr LOG records. tx with a non-zero mac_tx_status
+     * (NOACK, error, retry) surfaces as <wrn> so retry storms /
+     * unack'd unicasts stand out in scroll; everything else stays
+     * <inf>. */
+    if(log->type == tsch_log_tx && log->tx.mac_tx_status != 0) {
+      contiki_log_bridge_line_level(_CTK_LVL_WRN);
+    }
+
     if(log->link == NULL) {
-      printf("[INFO: TSCH-LOG  ] {asn %02x.%08"PRIx32" link-NULL} ", log->asn.ms1b, log->asn.ls4b);
+      LOG_OUTPUT("{asn %02x.%08"PRIx32" link-NULL} ", log->asn.ms1b, log->asn.ls4b);
     } else {
       struct tsch_slotframe *sf = tsch_schedule_get_slotframe_by_handle(log->link->slotframe_handle);
-      printf("[INFO: TSCH-LOG  ] {asn %02x.%08"PRIx32" link %2u %3u %3u %2u %2u ch %2u} ",
+      LOG_OUTPUT("{asn %02x.%08"PRIx32" link %2u %3u %3u %2u %2u ch %2u} ",
              log->asn.ms1b, log->asn.ls4b,
              log->link->slotframe_handle, sf ? sf->size.val : 0,
              log->burst_count, log->link->timeslot + log->burst_count, log->channel_offset,
@@ -91,35 +108,35 @@ tsch_log_process_pending(void)
     }
     switch(log->type) {
       case tsch_log_tx:
-        printf("%s-%u-%u tx ",
+        LOG_OUTPUT("%s-%u-%u tx ",
                 linkaddr_cmp(&log->tx.dest, &linkaddr_null) ? "bc" : "uc", log->tx.is_data, log->tx.sec_level);
         log_lladdr_compact(&linkaddr_node_addr);
-        printf("->");
+        LOG_OUTPUT("->");
         log_lladdr_compact(&log->tx.dest);
-        printf(", len %3u, seq %3u, st %d %2d",
+        LOG_OUTPUT(", len %3u, seq %3u, st %d %2d",
                 log->tx.datalen, log->tx.seqno, log->tx.mac_tx_status, log->tx.num_tx);
         if(log->tx.drift_used) {
-          printf(", dr %3d", log->tx.drift);
+          LOG_OUTPUT(", dr %3d", log->tx.drift);
         }
-        printf("\n");
+        LOG_OUTPUT("\n");
         break;
       case tsch_log_rx:
-        printf("%s-%u-%u rx ",
+        LOG_OUTPUT("%s-%u-%u rx ",
                 log->rx.is_unicast == 0 ? "bc" : "uc", log->rx.is_data, log->rx.sec_level);
         log_lladdr_compact(&log->rx.src);
-        printf("->");
+        LOG_OUTPUT("->");
         log_lladdr_compact(log->rx.is_unicast ? &linkaddr_node_addr : NULL);
-        printf(", len %3u, seq %3u",
+        LOG_OUTPUT(", len %3u, seq %3u",
                 log->rx.datalen, log->rx.seqno);
-        printf(", edr %3d", (int)log->rx.estimated_drift);
+        LOG_OUTPUT(", edr %3d", (int)log->rx.estimated_drift);
         if(log->rx.drift_used) {
-          printf(", dr %3d\n", log->rx.drift);
+          LOG_OUTPUT(", dr %3d\n", log->rx.drift);
         } else {
-          printf("\n");
+          LOG_OUTPUT("\n");
         }
         break;
       case tsch_log_message:
-        printf("%s\n", log->message);
+        LOG_OUTPUT("%s\n", log->message);
         break;
     }
     /* Remove input from ringbuf */
