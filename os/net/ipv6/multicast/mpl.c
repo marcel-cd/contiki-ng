@@ -1648,6 +1648,33 @@ accept(uint8_t in)
   }
 #endif
 
+#if MPL_CONF_ORIGINATOR_SKIP_TRICKLE
+  /* Klikk-fork patch: skip Trickle re-tx for self-originated multicast.
+   *
+   * The originator's initial transmission has already been emitted by
+   * out() via tcpip_output(NULL); leaving the Trickle timer running
+   * would queue additional copies of every multicast onto the
+   * broadcast queue (default K=1 ⇒ one re-tx per message) with no
+   * reliability benefit in our deployment, where:
+   *
+   *   - The mesh-OTA-bulk Orchestra rule installs a dedicated dense
+   *     TX cell (handle 2, ts1) for first-hop delivery.
+   *   - Unicast REQUEST/REPLY is the canonical loss-recovery channel.
+   *   - Multi-hop forwarding rides the orchestra forwarder cells
+   *     (hop-mod-N), still driven by Trickle on the FORWARDER side
+   *     — that path is untouched by this guard because forwarded
+   *     multicasts arrive with in == MPL_DGRAM_IN.
+   *
+   * Empirically: leaving originator Trickle on saturated the broadcast
+   * queue (`add packet failed: queue 15/16`) within ~1.5 s of bulk-OTA
+   * start, with no improvement in delivery to the leaf.
+   *
+   * Kconfig-guarded so we can flip back without restoring the fork. */
+  if (in == MPL_DGRAM_OUT && trickle_timer_is_running(&locmmptr->tt)) {
+    trickle_timer_stop(&locmmptr->tt);
+  }
+#endif
+
   /* Deliver if necessary */
   return UIP_MCAST6_ACCEPT;
 }

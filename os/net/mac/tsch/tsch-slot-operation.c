@@ -686,9 +686,19 @@ PT_THREAD(tsch_tx_slot(struct pt *pt, struct rtimer *t))
                 if(ack_len != 0) {
                   if(!tsch_security_parse_frame(ackbuf, ack_hdrlen, ack_len - ack_hdrlen - tsch_security_mic_len(&frame),
                       &frame, tsch_queue_get_nbr_address(current_neighbor), &tsch_current_asn)) {
+                    /* Klikk-fork diagnostic patch — same rationale as the
+                     * data-frame auth log a few lines down. */
+                    const linkaddr_t *nbr_addr =
+                        tsch_queue_get_nbr_address(current_neighbor);
                     TSCH_LOG_ADD(tsch_log_message,
                         snprintf(log->message, sizeof(log->message),
-                        "!failed to authenticate ACK"));
+                        "!auth ACK s=%u k=%u %02x%02x..%02x%02x",
+                        (unsigned)frame.aux_hdr.security_control.security_level,
+                        (unsigned)frame.aux_hdr.key_index,
+                        nbr_addr ? nbr_addr->u8[0] : 0,
+                        nbr_addr ? nbr_addr->u8[1] : 0,
+                        nbr_addr ? nbr_addr->u8[6] : 0,
+                        nbr_addr ? nbr_addr->u8[7] : 0));
                     ack_len = 0;
                   }
                 } else {
@@ -909,9 +919,17 @@ PT_THREAD(tsch_rx_slot(struct pt *pt, struct rtimer *t))
                &frame, &source_address, &tsch_current_asn)) {
             current_input->len -= tsch_security_mic_len(&frame);
           } else {
+            /* Klikk-fork diagnostic patch: surface what's actually
+             * mismatched so we can tell K2 desync from EB-on-data-cell
+             * from radio noise. Vanilla Contiki only logs the length. */
             TSCH_LOG_ADD(tsch_log_message,
                 snprintf(log->message, sizeof(log->message),
-                "!failed to authenticate frame %u", current_input->len));
+                "!auth l=%u s=%u k=%u %02x%02x..%02x%02x",
+                current_input->len,
+                (unsigned)frame.aux_hdr.security_control.security_level,
+                (unsigned)frame.aux_hdr.key_index,
+                source_address.u8[0], source_address.u8[1],
+                source_address.u8[6], source_address.u8[7]));
             frame_valid = 0;
           }
         }
