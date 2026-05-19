@@ -48,6 +48,15 @@
 #include "net/ipv6/uip-icmp6.h"
 #include "net/ipv6/multicast/uip-mcast6.h"
 #include "net/ipv6/multicast/mpl.h"
+
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+/* Klikk-fork: weak link to the orchestra-rule helper so non-bulk
+ * builds (no mesh-OTA rule registered) still compile. The rule lives
+ * in modules/contiki-tsch/src/orchestra/orchestra-rule-mesh-ota-bulk.c
+ * and pulls this symbol in at link time when the bulk rule is wired. */
+int orchestra_mesh_ota_bulk_is_active(void) __attribute__((weak));
+int orchestra_mesh_ota_bulk_is_active(void) { return 0; }
+#endif
 #include "dev/watchdog.h"
 #include "os/lib/trickle-timer.h"
 #include "os/lib/list.h"
@@ -1675,6 +1684,19 @@ accept(uint8_t in)
 #endif
 
 #if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+  /* Klikk-fork patch: extra runtime override — when a bulk OTA is
+   * actively running on this node, suppress Trickle for ALL inbound
+   * multicasts. The bulk slotframe is dimensioned to carry exactly
+   * the OTA traffic; any MPL forwarder re-tx (even of non-OTA traffic
+   * like KlikkStatusReport) at this moment is competing for the same
+   * broadcast queue and starves the BLOCK push. mesh_ota toggles
+   * orchestra_mesh_ota_bulk_is_active() around the bulk lifecycle. */
+  if (in == MPL_DGRAM_IN &&
+      orchestra_mesh_ota_bulk_is_active() &&
+      trickle_timer_is_running(&locmmptr->tt)) {
+    trickle_timer_stop(&locmmptr->tt);
+  }
+
   /* Klikk-fork patch: also skip Trickle on the FORWARDER path (received
    * multicasts) when the destination is in our OTA-group prefix.
    *
