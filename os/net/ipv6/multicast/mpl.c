@@ -1661,9 +1661,8 @@ accept(uint8_t in)
    *     TX cell (handle 2, ts1) for first-hop delivery.
    *   - Unicast REQUEST/REPLY is the canonical loss-recovery channel.
    *   - Multi-hop forwarding rides the orchestra forwarder cells
-   *     (hop-mod-N), still driven by Trickle on the FORWARDER side
-   *     — that path is untouched by this guard because forwarded
-   *     multicasts arrive with in == MPL_DGRAM_IN.
+   *     (hop-mod-N); leaf-side forwarder Trickle is independently
+   *     killed for OTA-group destinations by the second block below.
    *
    * Empirically: leaving originator Trickle on saturated the broadcast
    * queue (`add packet failed: queue 15/16`) within ~1.5 s of bulk-OTA
@@ -1671,6 +1670,36 @@ accept(uint8_t in)
    *
    * Kconfig-guarded so we can flip back without restoring the fork. */
   if (in == MPL_DGRAM_OUT && trickle_timer_is_running(&locmmptr->tt)) {
+    trickle_timer_stop(&locmmptr->tt);
+  }
+#endif
+
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+  /* Klikk-fork patch: also skip Trickle on the FORWARDER path (received
+   * multicasts) when the destination is in our OTA-group prefix.
+   *
+   * Prefix: ff03::cb01:00xx — see tsch_api.c::group_to_ipaddr and
+   * mesh_ota_mesh_wire.h::mesh_ota_group_id(). The hi/lo octets at
+   * indices 0,1,12,13,14 are deterministic; index 15 is the FNV-1a-8
+   * of the hw_model string, varying per group.
+   *
+   * Why not just MPL_PROACTIVE_FORWARDING=0 on the leaf: leaves are
+   * the actual relay hops for legitimate multi-hop multicasts that
+   * AREN'T OTA (fleet config push, MPL control). Those should keep
+   * Trickle relay. We only need to bypass MPL for OTA BLOCKs, whose
+   * relay is owned by the application-layer mesh_ota module on the
+   * deterministic hop-mod-N forwarder cells.
+   *
+   * Upper-layer delivery is unaffected — accept() still returns
+   * UIP_MCAST6_ACCEPT and the message reaches the application. We
+   * only stop the storage-Trickle path from re-emitting. */
+  if (in == MPL_DGRAM_IN &&
+      UIP_IP_BUF->destipaddr.u8[0]  == 0xff &&
+      UIP_IP_BUF->destipaddr.u8[1]  == 0x03 &&
+      UIP_IP_BUF->destipaddr.u8[12] == 0xcb &&
+      UIP_IP_BUF->destipaddr.u8[13] == 0x01 &&
+      UIP_IP_BUF->destipaddr.u8[14] == 0x00 &&
+      trickle_timer_is_running(&locmmptr->tt)) {
     trickle_timer_stop(&locmmptr->tt);
   }
 #endif
