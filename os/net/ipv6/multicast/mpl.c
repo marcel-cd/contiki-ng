@@ -1179,6 +1179,26 @@ icmp_in(void)
       if(list_head(locssptr->min_seq) != NULL) {
         for(locmmptr = list_head(locssptr->min_seq); locmmptr != NULL; locmmptr = list_item_next(locmmptr)) {
           LOG_DBG("Resetting timer for messages\n");
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+          /* Klikk-fork: don't start the per-buffer DATA Trickle for
+           * OTA-group domains. icmp_in's "remote is missing seqs"
+           * inference would otherwise drive the gateway to re-emit
+           * every cached BLOCK from MPL's storage on each leaf MPL
+           * Control arrival — a 5..15× retx storm per BLOCK (see
+           * bench LEAK log + leaf-team Wireshark cap 2026-05-20).
+           * The OTA path uses unicast REQUEST/REPLY for repair;
+           * MPL forwarder Trickle adds nothing here. */
+          if (locdsptr->data_addr.u8[0]  == 0xff &&
+              locdsptr->data_addr.u8[1]  == 0x03 &&
+              locdsptr->data_addr.u8[12] == 0xcb &&
+              locdsptr->data_addr.u8[13] == 0x01 &&
+              locdsptr->data_addr.u8[14] == 0x00) {
+            if (trickle_timer_is_running(&locmmptr->tt)) {
+              trickle_timer_stop(&locmmptr->tt);
+            }
+            continue;
+          }
+#endif
           if(!trickle_timer_is_running(&locmmptr->tt)) {
             LOG_DBG("Starting timer for messages\n");
             mpl_data_trickle_timer_start(locmmptr);
@@ -1285,6 +1305,19 @@ seed_present:
           /* Additionally all data message timers in set if r is behind us */
           if(list_head(locssptr->min_seq) != NULL) {
             for(locmmptr = list_head(locssptr->min_seq); locmmptr != NULL; locmmptr = list_item_next(locmmptr)) {
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+              /* Klikk-fork: see "remote is missing seed" block above. */
+              if (locdsptr->data_addr.u8[0]  == 0xff &&
+                  locdsptr->data_addr.u8[1]  == 0x03 &&
+                  locdsptr->data_addr.u8[12] == 0xcb &&
+                  locdsptr->data_addr.u8[13] == 0x01 &&
+                  locdsptr->data_addr.u8[14] == 0x00) {
+                if (trickle_timer_is_running(&locmmptr->tt)) {
+                  trickle_timer_stop(&locmmptr->tt);
+                }
+                continue;
+              }
+#endif
               if(!trickle_timer_is_running(&locmmptr->tt)) {
                 mpl_data_trickle_timer_start(locmmptr);
               }
@@ -1324,10 +1357,24 @@ seed_present:
         /* Local message is missing from remote set. Reset control and data timers */
         LOG_DBG("Remote is missing seq=%u\n", locmmptr->seq);
         r_missing = 1;
-        if(!trickle_timer_is_running(&locmmptr->tt)) {
-          mpl_data_trickle_timer_start(locmmptr);
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+        /* Klikk-fork: see "remote is missing seed" block above. */
+        if (locdsptr->data_addr.u8[0]  == 0xff &&
+            locdsptr->data_addr.u8[1]  == 0x03 &&
+            locdsptr->data_addr.u8[12] == 0xcb &&
+            locdsptr->data_addr.u8[13] == 0x01 &&
+            locdsptr->data_addr.u8[14] == 0x00) {
+          if (trickle_timer_is_running(&locmmptr->tt)) {
+            trickle_timer_stop(&locmmptr->tt);
+          }
+        } else
+#endif
+        {
+          if(!trickle_timer_is_running(&locmmptr->tt)) {
+            mpl_data_trickle_timer_start(locmmptr);
+          }
+          mpl_trickle_timer_inconsistency(locmmptr);
         }
-        mpl_trickle_timer_inconsistency(locmmptr);
       }
 
       /* Now increment our pointers */
@@ -1356,10 +1403,24 @@ seed_present:
        */
       while(locmmptr != NULL) {
         LOG_DBG("Remote is missing all above seq=%u\n", locmmptr->seq);
-        if(!trickle_timer_is_running(&locmmptr->tt)) {
-          mpl_data_trickle_timer_start(locmmptr);
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+        /* Klikk-fork: see "remote is missing seed" block above. */
+        if (locdsptr->data_addr.u8[0]  == 0xff &&
+            locdsptr->data_addr.u8[1]  == 0x03 &&
+            locdsptr->data_addr.u8[12] == 0xcb &&
+            locdsptr->data_addr.u8[13] == 0x01 &&
+            locdsptr->data_addr.u8[14] == 0x00) {
+          if (trickle_timer_is_running(&locmmptr->tt)) {
+            trickle_timer_stop(&locmmptr->tt);
+          }
+        } else
+#endif
+        {
+          if(!trickle_timer_is_running(&locmmptr->tt)) {
+            mpl_data_trickle_timer_start(locmmptr);
+          }
+          mpl_trickle_timer_inconsistency(locmmptr);
         }
-        mpl_trickle_timer_inconsistency(locmmptr);
         r_missing = 1;
         locmmptr = list_item_next(locmmptr);
       }
@@ -1631,10 +1692,45 @@ accept(uint8_t in)
 
   /* Start the control message timer if needed */
 #if MPL_CONTROL_MESSAGE_TIMER_EXPIRATIONS > 0
-  if(!trickle_timer_is_running(&locdsptr->tt)) {
-    mpl_control_trickle_timer_start(locdsptr);
-  } else {
-    mpl_trickle_timer_reset(locdsptr);
+  {
+    int skip_control_trickle = 0;
+#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
+    /* Klikk-fork patch: skip per-domain Control Trickle entirely on
+     * OTA-group destinations. CONTROL advertises which seeds/seqs we
+     * have so peers can pull missing ones via inconsistency-detection
+     * — but our OTA path uses unicast REQUEST/REPLY for the same job,
+     * making CONTROL pure overhead.
+     *
+     * Without this gate, the gateway's per-domain Trickle was being
+     * reset on every accepted MPL_DGRAM_OUT (each BLOCK emit), so the
+     * Trickle interval stayed pinned at Imin (~32 ms) for the whole
+     * bulk push. The result was ~13 Hz of CONTROL messages emitted by
+     * the gateway, all landing on ts0 of the mesh-OTA-bulk slotframe
+     * (the lane reserved for leaf forwarders), stealing airtime from
+     * the actual forwarder cells and driving up the gateway's queue
+     * pressure.
+     *
+     * Prefix match identical to the DATA-side skip a few lines down.
+     * Applies in BOTH directions (OUT and IN) for OTA-group domains —
+     * neither side benefits from CONTROL on this lane. */
+    if (UIP_IP_BUF->destipaddr.u8[0]  == 0xff &&
+        UIP_IP_BUF->destipaddr.u8[1]  == 0x03 &&
+        UIP_IP_BUF->destipaddr.u8[12] == 0xcb &&
+        UIP_IP_BUF->destipaddr.u8[13] == 0x01 &&
+        UIP_IP_BUF->destipaddr.u8[14] == 0x00) {
+      skip_control_trickle = 1;
+      if (trickle_timer_is_running(&locdsptr->tt)) {
+        trickle_timer_stop(&locdsptr->tt);
+      }
+    }
+#endif
+    if (!skip_control_trickle) {
+      if(!trickle_timer_is_running(&locdsptr->tt)) {
+        mpl_control_trickle_timer_start(locdsptr);
+      } else {
+        mpl_trickle_timer_reset(locdsptr);
+      }
+    }
   }
 #endif
 
