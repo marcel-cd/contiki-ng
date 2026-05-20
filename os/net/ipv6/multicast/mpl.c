@@ -48,15 +48,6 @@
 #include "net/ipv6/uip-icmp6.h"
 #include "net/ipv6/multicast/uip-mcast6.h"
 #include "net/ipv6/multicast/mpl.h"
-
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-/* Klikk-fork: weak link to the orchestra-rule helper so non-bulk
- * builds (no mesh-OTA rule registered) still compile. The rule lives
- * in modules/contiki-tsch/src/orchestra/orchestra-rule-mesh-ota-bulk.c
- * and pulls this symbol in at link time when the bulk rule is wired. */
-int orchestra_mesh_ota_bulk_is_active(void) __attribute__((weak));
-int orchestra_mesh_ota_bulk_is_active(void) { return 0; }
-#endif
 #include "dev/watchdog.h"
 #include "os/lib/trickle-timer.h"
 #include "os/lib/list.h"
@@ -1179,26 +1170,6 @@ icmp_in(void)
       if(list_head(locssptr->min_seq) != NULL) {
         for(locmmptr = list_head(locssptr->min_seq); locmmptr != NULL; locmmptr = list_item_next(locmmptr)) {
           LOG_DBG("Resetting timer for messages\n");
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-          /* Klikk-fork: don't start the per-buffer DATA Trickle for
-           * OTA-group domains. icmp_in's "remote is missing seqs"
-           * inference would otherwise drive the gateway to re-emit
-           * every cached BLOCK from MPL's storage on each leaf MPL
-           * Control arrival — a 5..15× retx storm per BLOCK (see
-           * bench LEAK log + leaf-team Wireshark cap 2026-05-20).
-           * The OTA path uses unicast REQUEST/REPLY for repair;
-           * MPL forwarder Trickle adds nothing here. */
-          if (locdsptr->data_addr.u8[0]  == 0xff &&
-              locdsptr->data_addr.u8[1]  == 0x03 &&
-              locdsptr->data_addr.u8[12] == 0xcb &&
-              locdsptr->data_addr.u8[13] == 0x01 &&
-              locdsptr->data_addr.u8[14] == 0x00) {
-            if (trickle_timer_is_running(&locmmptr->tt)) {
-              trickle_timer_stop(&locmmptr->tt);
-            }
-            continue;
-          }
-#endif
           if(!trickle_timer_is_running(&locmmptr->tt)) {
             LOG_DBG("Starting timer for messages\n");
             mpl_data_trickle_timer_start(locmmptr);
@@ -1282,13 +1253,7 @@ seed_present:
 
       /* There is no overlap in message sets */
       if(r > vector_len || locmmptr == NULL) {
-        /* Downgraded from LOG_WARN by the Zephyr port: this fires
-         * when one node has evicted seeds the other still tracks
-         * (sized via MPL_CONF_SEED_SET_SIZE). With the bumped pool
-         * sizes in our contiki-conf.h it should now be very rare,
-         * and even when it does occur it is an internal MPL state
-         * event, not an actionable application error. */
-        LOG_DBG("Seed sets of local and remote have no overlap.\n");
+        LOG_WARN("Seed sets of local and remote have no overlap.\n");
         /* Work out who is behind who */
         locmmptr = list_head(locssptr->min_seq);
         while(list_item_next(locmmptr) != NULL) {
@@ -1305,19 +1270,6 @@ seed_present:
           /* Additionally all data message timers in set if r is behind us */
           if(list_head(locssptr->min_seq) != NULL) {
             for(locmmptr = list_head(locssptr->min_seq); locmmptr != NULL; locmmptr = list_item_next(locmmptr)) {
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-              /* Klikk-fork: see "remote is missing seed" block above. */
-              if (locdsptr->data_addr.u8[0]  == 0xff &&
-                  locdsptr->data_addr.u8[1]  == 0x03 &&
-                  locdsptr->data_addr.u8[12] == 0xcb &&
-                  locdsptr->data_addr.u8[13] == 0x01 &&
-                  locdsptr->data_addr.u8[14] == 0x00) {
-                if (trickle_timer_is_running(&locmmptr->tt)) {
-                  trickle_timer_stop(&locmmptr->tt);
-                }
-                continue;
-              }
-#endif
               if(!trickle_timer_is_running(&locmmptr->tt)) {
                 mpl_data_trickle_timer_start(locmmptr);
               }
@@ -1357,24 +1309,10 @@ seed_present:
         /* Local message is missing from remote set. Reset control and data timers */
         LOG_DBG("Remote is missing seq=%u\n", locmmptr->seq);
         r_missing = 1;
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-        /* Klikk-fork: see "remote is missing seed" block above. */
-        if (locdsptr->data_addr.u8[0]  == 0xff &&
-            locdsptr->data_addr.u8[1]  == 0x03 &&
-            locdsptr->data_addr.u8[12] == 0xcb &&
-            locdsptr->data_addr.u8[13] == 0x01 &&
-            locdsptr->data_addr.u8[14] == 0x00) {
-          if (trickle_timer_is_running(&locmmptr->tt)) {
-            trickle_timer_stop(&locmmptr->tt);
-          }
-        } else
-#endif
-        {
-          if(!trickle_timer_is_running(&locmmptr->tt)) {
-            mpl_data_trickle_timer_start(locmmptr);
-          }
-          mpl_trickle_timer_inconsistency(locmmptr);
+        if(!trickle_timer_is_running(&locmmptr->tt)) {
+          mpl_data_trickle_timer_start(locmmptr);
         }
+        mpl_trickle_timer_inconsistency(locmmptr);
       }
 
       /* Now increment our pointers */
@@ -1403,24 +1341,10 @@ seed_present:
        */
       while(locmmptr != NULL) {
         LOG_DBG("Remote is missing all above seq=%u\n", locmmptr->seq);
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-        /* Klikk-fork: see "remote is missing seed" block above. */
-        if (locdsptr->data_addr.u8[0]  == 0xff &&
-            locdsptr->data_addr.u8[1]  == 0x03 &&
-            locdsptr->data_addr.u8[12] == 0xcb &&
-            locdsptr->data_addr.u8[13] == 0x01 &&
-            locdsptr->data_addr.u8[14] == 0x00) {
-          if (trickle_timer_is_running(&locmmptr->tt)) {
-            trickle_timer_stop(&locmmptr->tt);
-          }
-        } else
-#endif
-        {
-          if(!trickle_timer_is_running(&locmmptr->tt)) {
-            mpl_data_trickle_timer_start(locmmptr);
-          }
-          mpl_trickle_timer_inconsistency(locmmptr);
+        if(!trickle_timer_is_running(&locmmptr->tt)) {
+          mpl_data_trickle_timer_start(locmmptr);
         }
+        mpl_trickle_timer_inconsistency(locmmptr);
         r_missing = 1;
         locmmptr = list_item_next(locmmptr);
       }
@@ -1491,11 +1415,7 @@ accept(uint8_t in)
 #endif
 
   if(uip_ds6_is_my_addr(&UIP_IP_BUF->srcipaddr) && in == MPL_DGRAM_IN) {
-    /* Downgraded from LOG_WARN by the Zephyr port: this fires
-     * after some MPL state churn (e.g. RPL local-repair) when a
-     * forwarder briefly echoes our own multicast back to us. The
-     * frame is correctly dropped here — it is purely informational. */
-    LOG_DBG("Received message from ourselves.\n");
+    LOG_WARN("Received message from ourselves.\n");
     return UIP_MCAST6_DROP;
   }
 
@@ -1692,45 +1612,10 @@ accept(uint8_t in)
 
   /* Start the control message timer if needed */
 #if MPL_CONTROL_MESSAGE_TIMER_EXPIRATIONS > 0
-  {
-    int skip_control_trickle = 0;
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-    /* Klikk-fork patch: skip per-domain Control Trickle entirely on
-     * OTA-group destinations. CONTROL advertises which seeds/seqs we
-     * have so peers can pull missing ones via inconsistency-detection
-     * — but our OTA path uses unicast REQUEST/REPLY for the same job,
-     * making CONTROL pure overhead.
-     *
-     * Without this gate, the gateway's per-domain Trickle was being
-     * reset on every accepted MPL_DGRAM_OUT (each BLOCK emit), so the
-     * Trickle interval stayed pinned at Imin (~32 ms) for the whole
-     * bulk push. The result was ~13 Hz of CONTROL messages emitted by
-     * the gateway, all landing on ts0 of the mesh-OTA-bulk slotframe
-     * (the lane reserved for leaf forwarders), stealing airtime from
-     * the actual forwarder cells and driving up the gateway's queue
-     * pressure.
-     *
-     * Prefix match identical to the DATA-side skip a few lines down.
-     * Applies in BOTH directions (OUT and IN) for OTA-group domains —
-     * neither side benefits from CONTROL on this lane. */
-    if (UIP_IP_BUF->destipaddr.u8[0]  == 0xff &&
-        UIP_IP_BUF->destipaddr.u8[1]  == 0x03 &&
-        UIP_IP_BUF->destipaddr.u8[12] == 0xcb &&
-        UIP_IP_BUF->destipaddr.u8[13] == 0x01 &&
-        UIP_IP_BUF->destipaddr.u8[14] == 0x00) {
-      skip_control_trickle = 1;
-      if (trickle_timer_is_running(&locdsptr->tt)) {
-        trickle_timer_stop(&locdsptr->tt);
-      }
-    }
-#endif
-    if (!skip_control_trickle) {
-      if(!trickle_timer_is_running(&locdsptr->tt)) {
-        mpl_control_trickle_timer_start(locdsptr);
-      } else {
-        mpl_trickle_timer_reset(locdsptr);
-      }
-    }
+  if(!trickle_timer_is_running(&locdsptr->tt)) {
+    mpl_control_trickle_timer_start(locdsptr);
+  } else {
+    mpl_trickle_timer_reset(locdsptr);
   }
 #endif
 
@@ -1753,75 +1638,6 @@ accept(uint8_t in)
   }
 #endif
 
-#if MPL_CONF_ORIGINATOR_SKIP_TRICKLE
-  /* Klikk-fork patch: skip Trickle re-tx for self-originated multicast.
-   *
-   * The originator's initial transmission has already been emitted by
-   * out() via tcpip_output(NULL); leaving the Trickle timer running
-   * would queue additional copies of every multicast onto the
-   * broadcast queue (default K=1 ⇒ one re-tx per message) with no
-   * reliability benefit in our deployment, where:
-   *
-   *   - The mesh-OTA-bulk Orchestra rule installs a dedicated dense
-   *     TX cell (handle 2, ts1) for first-hop delivery.
-   *   - Unicast REQUEST/REPLY is the canonical loss-recovery channel.
-   *   - Multi-hop forwarding rides the orchestra forwarder cells
-   *     (hop-mod-N); leaf-side forwarder Trickle is independently
-   *     killed for OTA-group destinations by the second block below.
-   *
-   * Empirically: leaving originator Trickle on saturated the broadcast
-   * queue (`add packet failed: queue 15/16`) within ~1.5 s of bulk-OTA
-   * start, with no improvement in delivery to the leaf.
-   *
-   * Kconfig-guarded so we can flip back without restoring the fork. */
-  if (in == MPL_DGRAM_OUT && trickle_timer_is_running(&locmmptr->tt)) {
-    trickle_timer_stop(&locmmptr->tt);
-  }
-#endif
-
-#if MPL_CONF_OTA_GROUP_SKIP_TRICKLE
-  /* Klikk-fork patch: extra runtime override — when a bulk OTA is
-   * actively running on this node, suppress Trickle for ALL inbound
-   * multicasts. The bulk slotframe is dimensioned to carry exactly
-   * the OTA traffic; any MPL forwarder re-tx (even of non-OTA traffic
-   * like KlikkStatusReport) at this moment is competing for the same
-   * broadcast queue and starves the BLOCK push. mesh_ota toggles
-   * orchestra_mesh_ota_bulk_is_active() around the bulk lifecycle. */
-  if (in == MPL_DGRAM_IN &&
-      orchestra_mesh_ota_bulk_is_active() &&
-      trickle_timer_is_running(&locmmptr->tt)) {
-    trickle_timer_stop(&locmmptr->tt);
-  }
-
-  /* Klikk-fork patch: also skip Trickle on the FORWARDER path (received
-   * multicasts) when the destination is in our OTA-group prefix.
-   *
-   * Prefix: ff03::cb01:00xx — see tsch_api.c::group_to_ipaddr and
-   * mesh_ota_mesh_wire.h::mesh_ota_group_id(). The hi/lo octets at
-   * indices 0,1,12,13,14 are deterministic; index 15 is the FNV-1a-8
-   * of the hw_model string, varying per group.
-   *
-   * Why not just MPL_PROACTIVE_FORWARDING=0 on the leaf: leaves are
-   * the actual relay hops for legitimate multi-hop multicasts that
-   * AREN'T OTA (fleet config push, MPL control). Those should keep
-   * Trickle relay. We only need to bypass MPL for OTA BLOCKs, whose
-   * relay is owned by the application-layer mesh_ota module on the
-   * deterministic hop-mod-N forwarder cells.
-   *
-   * Upper-layer delivery is unaffected — accept() still returns
-   * UIP_MCAST6_ACCEPT and the message reaches the application. We
-   * only stop the storage-Trickle path from re-emitting. */
-  if (in == MPL_DGRAM_IN &&
-      UIP_IP_BUF->destipaddr.u8[0]  == 0xff &&
-      UIP_IP_BUF->destipaddr.u8[1]  == 0x03 &&
-      UIP_IP_BUF->destipaddr.u8[12] == 0xcb &&
-      UIP_IP_BUF->destipaddr.u8[13] == 0x01 &&
-      UIP_IP_BUF->destipaddr.u8[14] == 0x00 &&
-      trickle_timer_is_running(&locmmptr->tt)) {
-    trickle_timer_stop(&locmmptr->tt);
-  }
-#endif
-
   /* Deliver if necessary */
   return UIP_MCAST6_ACCEPT;
 }
@@ -1832,12 +1648,7 @@ out(void)
   if(local_seed_id.s == MPL_SEED_ID_UNKNOWN) {
     update_seed_id();
     if(local_seed_id.s == MPL_SEED_ID_UNKNOWN) {
-      /* Downgraded from LOG_ERR by the Zephyr port: this fires
-       * during normal startup for any multicast send that happens
-       * before the first DIO with prefix info has been processed
-       * (the seed id is derived from the global address). It is
-       * informational, not an error. */
-      LOG_DBG("Our seed ID is not yet known.\n");
+      LOG_ERR("Our seed ID is not yet known.\n");
       goto drop;
     }
   }

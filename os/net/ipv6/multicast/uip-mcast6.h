@@ -67,6 +67,14 @@
 #include "net/ipv6/multicast/roll-tm.h"
 #include "net/ipv6/multicast/mpl.h"
 
+/* Klikk-fork: optional address-dispatched driver (direct + MPL). Lives
+ * outside the upstream tree at modules/contiki-tsch/src/multicast/; the
+ * header is reachable via the module's include path. Selected via
+ * UIP_MCAST6_ENGINE_KLIKK_HYBRID below. */
+#if UIP_MCAST6_CONF_ENGINE == UIP_MCAST6_ENGINE_KLIKK_HYBRID
+#include "klikk_mcast.h"
+#endif
+
 #include <string.h>
 /*---------------------------------------------------------------------------*/
 /* Constants */
@@ -169,6 +177,13 @@ struct uip_mcast6_driver {
 #elif UIP_MCAST6_ENGINE == UIP_MCAST6_ENGINE_MPL
 #define RPL_WITH_MULTICAST     0
 #define UIP_MCAST6             mpl_driver
+
+#elif UIP_MCAST6_ENGINE == UIP_MCAST6_ENGINE_KLIKK_HYBRID
+/* Klikk hybrid: in/out dispatched by destination + OTA-Boost state.
+ * Falls through to mpl_driver for non-OTA traffic, so RPL_WITH_MULTICAST
+ * stays the same as the pure-MPL path. */
+#define RPL_WITH_MULTICAST     0
+#define UIP_MCAST6             klikk_mcast_hybrid_driver
 
 #else
 #error "Multicast Enabled with an Unknown Engine."
