@@ -1190,7 +1190,12 @@ packet_input(void)
   frame_parsed = NETSTACK_FRAMER.parse();
 
   if(frame_parsed < 0) {
-    LOG_ERR("! failed to parse %u\n", packetbuf_datalen());
+    /* Downgraded from LOG_ERR: a frame the framer rejects here is normally
+     * foreign traffic (another PAN sharing the channel — TSCH hops the same
+     * 16 channels regardless of PAN) or an unauthenticated frame, not a local
+     * fault. At ERR it floods when two PANs run on one channel. Matches the
+     * LOG_DBG already used for the EB-scan parse-failure path above. */
+    LOG_DBG("! failed to parse %u\n", packetbuf_datalen());
   } else {
     int duplicate = 0;
 
