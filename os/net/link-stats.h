@@ -105,7 +105,8 @@ struct link_packet_counter {
 struct link_stats {
   clock_time_t last_tx_time;  /* Last Tx timestamp */
   uint16_t etx;               /* ETX using ETX_DIVISOR as fixed point divisor. Zero if not yet measured. */
-  int16_t rssi;               /* RSSI (received signal strength). LINK_STATS_RSSI_UNKNOWN if not yet measured. */
+  int16_t rssi;               /* RSSI (received signal strength), EWMA-smoothed for routing. LINK_STATS_RSSI_UNKNOWN if not yet measured. */
+  int16_t last_rssi;          /* Raw RSSI of the most recent received frame (un-smoothed) — for live display/reporting. LINK_STATS_RSSI_UNKNOWN if none. */
   uint8_t freshness;          /* Freshness of the statistics. Zero if no packets sent yet. */
 #if LINK_STATS_ETX_FROM_PACKET_COUNT
   uint8_t tx_count;           /* Tx count, used for ETX calculation */

@@ -164,6 +164,7 @@ link_stats_packet_sent(const linkaddr_t *lladdr, int status, int numtx)
       return; /* No space left, return */
     }
     stats->rssi = LINK_STATS_RSSI_UNKNOWN;
+    stats->last_rssi = LINK_STATS_RSSI_UNKNOWN;
   }
 
   if(status == MAC_TX_QUEUE_FULL) {
@@ -243,7 +244,13 @@ link_stats_input_callback(const linkaddr_t *lladdr)
       return; /* No space left, return */
     }
     stats->rssi = LINK_STATS_RSSI_UNKNOWN;
+    stats->last_rssi = LINK_STATS_RSSI_UNKNOWN;
   }
+
+  /* Raw, un-smoothed RSSI of this frame — for live display/reporting
+   * (tsch_get_peer_rssi). Kept separate from the EWMA below, which routing
+   * still uses. */
+  stats->last_rssi = packet_rssi;
 
   if(stats->rssi == LINK_STATS_RSSI_UNKNOWN) {
     /* Initialize RSSI */
