@@ -73,8 +73,11 @@ enum ieee802154e_mlme_short_subie_id {
   MLME_SHORT_IE_TSCH_TIMESLOT,
   MLME_SHORT_IE_TSCH_HOPPING_TIMING,
   MLME_SHORT_IE_TSCH_EB_FILTER,
-  MLME_SHORT_IE_TSCH_MAC_METRICS_1,
   MLME_SHORT_IE_TSCH_MAC_METRICS_2,
+  /* Klikk proprietary. Outside the 0x1a-0x20 TSCH cluster so it never
+   * collides with a future standard short sub-IE. Only Klikk nodes (same
+   * fork) share the PAN, so a private sub-ID is safe. */
+  MLME_SHORT_IE_KLIKK_UTC = 0x40,
 };
 
 /* c.f. IEEE 802.15.4e Table 4e */
@@ -245,6 +248,29 @@ frame80215e_create_ie_tsch_synchronization(uint8_t *buf, int len,
     buf[6] = ies->ie_asn.ms1b;
     buf[7] = ies->ie_join_priority;
     create_mlme_short_ie_descriptor(buf, MLME_SHORT_IE_TSCH_SYNCHRONIZATION, ie_len);
+    return 2 + ie_len;
+  } else {
+    return -1;
+  }
+}
+
+/* MLME sub-IE. Klikk proprietary wall-clock.
+ * Content (9 B): [present:1][utc_us:int64, little-endian].
+ * The UTC corresponds to the ASN in this same EB's TSCH synchronization IE,
+ * so a receiver derives wall-clock as utc + (asn_now - eb_asn) * timeslot_us. */
+int
+frame80215e_create_ie_klikk_utc(uint8_t *buf, int len,
+    const struct ieee802154_ies *ies)
+{
+  int ie_len = 9;
+  if(len >= 2 + ie_len && ies != NULL) {
+    int i;
+    uint64_t u = (uint64_t)ies->ie_klikk_utc_us;
+    buf[2] = ies->ie_klikk_utc_present ? 1 : 0;
+    for(i = 0; i < 8; i++) {
+      buf[3 + i] = (uint8_t)(u >> (8 * i));
+    }
+    create_mlme_short_ie_descriptor(buf, MLME_SHORT_IE_KLIKK_UTC, ie_len);
     return 2 + ie_len;
   } else {
     return -1;
@@ -431,6 +457,21 @@ frame802154e_parse_mlme_short_ie(const uint8_t *buf, int len,
               READ16(buf+1+2*i, ies->ie_tsch_timeslot[i]);
             }
           }
+        }
+        return len;
+      }
+      break;
+    case MLME_SHORT_IE_KLIKK_UTC:
+      /* Klikk proprietary wall-clock. [present:1][utc_us:int64 LE] */
+      if(len == 9) {
+        if(ies != NULL) {
+          int i;
+          uint64_t u = 0;
+          ies->ie_klikk_utc_present = buf[0];
+          for(i = 0; i < 8; i++) {
+            u |= (uint64_t)buf[1 + i] << (8 * i);
+          }
+          ies->ie_klikk_utc_us = (int64_t)u;
         }
         return len;
       }

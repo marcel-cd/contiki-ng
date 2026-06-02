@@ -232,6 +232,20 @@
 #define TSCH_PACKET_EB_WITH_TIMESLOT_TIMING 0
 #endif
 
+/* TSCH EB: include the Klikk proprietary wall-clock (UTC) IE?
+ * Klikk extension (not upstream): when set, the coordinator's EBs carry
+ * an MLME short sub-IE pairing the EB's ASN with a UTC timestamp, letting
+ * leaves derive wall-clock from the ASN they already track. Default OFF:
+ * the *parse* path is always compiled, but emission must stay off until
+ * every leaf in the fleet ships a contiki-tsch with the parse case — an
+ * older strict parser rejects the whole EB on an unknown sub-IE.
+ * See docs/leaf-time-sync.md. */
+#ifdef TSCH_PACKET_CONF_EB_WITH_KLIKK_UTC
+#define TSCH_PACKET_EB_WITH_KLIKK_UTC TSCH_PACKET_CONF_EB_WITH_KLIKK_UTC
+#else
+#define TSCH_PACKET_EB_WITH_KLIKK_UTC 0
+#endif
+
 /* TSCH EB: include hopping sequence Information Element? */
 #ifdef TSCH_PACKET_CONF_EB_WITH_HOPPING_SEQUENCE
 #define TSCH_PACKET_EB_WITH_HOPPING_SEQUENCE TSCH_PACKET_CONF_EB_WITH_HOPPING_SEQUENCE

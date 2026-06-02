@@ -134,5 +134,35 @@ void tsch_packet_eackbuf_set_attr(uint8_t type, const packetbuf_attr_t val);
  */
 packetbuf_attr_t tsch_packet_eackbuf_attr(uint8_t type);
 
+/* ---- Klikk wall-clock-over-EB extension (see docs/leaf-time-sync.md) ---- */
+
+/**
+ * \brief EB UTC provider (coordinator side).
+ *
+ * Registered by the gateway's mesh_time module. Called from
+ * tsch_packet_update_eb() at EB TX time (slot-operation context — must be
+ * cheap and non-blocking). Must return the UTC, in microseconds since the
+ * Unix epoch, corresponding to the CURRENT tsch_current_asn.
+ *
+ * \param out_utc_us Where to write the UTC (us). Written only on success.
+ * \return 1 if a valid wall-clock was available and *out_utc_us was written,
+ *         0 otherwise (the EB then advertises "no time").
+ */
+typedef int (*tsch_eb_utc_provider_t)(int64_t *out_utc_us);
+void tsch_eb_utc_provider_set(tsch_eb_utc_provider_t provider);
+
+/**
+ * \brief EB UTC sink (leaf side).
+ *
+ * Registered by the leaf application. Invoked from tsch_packet_parse_eb()
+ * whenever an EB carrying a valid Klikk UTC IE is parsed, with the EB's
+ * reference ASN and its UTC (us). The leaf derives wall-clock from its own
+ * tsch_current_asn:
+ *   utc_now = utc_us + TSCH_ASN_DIFF(tsch_current_asn, ref_asn) * timeslot_us
+ * Runs in TSCH context — keep it short (store the anchor and return).
+ */
+typedef void (*tsch_eb_utc_sink_t)(struct tsch_asn_t ref_asn, int64_t utc_us);
+void tsch_eb_utc_sink_set(tsch_eb_utc_sink_t sink);
+
 #endif /* TSCH_PACKET_H_ */
 /** @} */

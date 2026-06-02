@@ -90,6 +90,11 @@ struct ieee802154_ies {
   const uint8_t *sixtop_ie_content_ptr;
   uint16_t sixtop_ie_content_len;
 #endif /* TSCH_WITH_SIXTOP */
+  /* Klikk proprietary MLME short sub-IE: wall-clock (UTC microseconds)
+   * paired with this frame's ie_asn. ie_klikk_utc_present==0 means the
+   * sender had no valid wall-clock yet (ignore ie_klikk_utc_us). */
+  uint8_t ie_klikk_utc_present;
+  int64_t ie_klikk_utc_us;
 };
 
 /** Insert various Information Elements **/
@@ -117,6 +122,10 @@ int frame80215e_create_ie_mlme(uint8_t *buf, int len,
     const struct ieee802154_ies *ies);
 /* MLME sub-IE. TSCH synchronization. Used in EBs: ASN and join priority */
 int frame80215e_create_ie_tsch_synchronization(uint8_t *buf, int len,
+    const struct ieee802154_ies *ies);
+/* MLME sub-IE. Klikk proprietary wall-clock. Pairs UTC (us) with the EB's
+ * ASN so leaves can derive wall-clock from their locally-tracked ASN. */
+int frame80215e_create_ie_klikk_utc(uint8_t *buf, int len,
     const struct ieee802154_ies *ies);
 /* MLME sub-IE. TSCH slotframe and link. Used in EBs: initial schedule */
 int frame80215e_create_ie_tsch_slotframe_and_link(uint8_t *buf, int len,

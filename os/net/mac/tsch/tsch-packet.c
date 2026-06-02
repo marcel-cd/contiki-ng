@@ -57,6 +57,26 @@
 #define LOG_MODULE "TSCH Pkt"
 #define LOG_LEVEL LOG_LEVEL_MAC
 
+/* Klikk wall-clock-over-EB extension (see docs/leaf-time-sync.md). The
+ * provider (coordinator) is only referenced under the emission gate; guard
+ * it so leaf/parse-only builds don't carry an unused static. The sink (leaf)
+ * is always live — tsch_packet_parse_eb() fires it on every UTC-bearing EB. */
+#if TSCH_PACKET_EB_WITH_KLIKK_UTC
+static tsch_eb_utc_provider_t klikk_eb_utc_provider;
+void
+tsch_eb_utc_provider_set(tsch_eb_utc_provider_t provider)
+{
+  klikk_eb_utc_provider = provider;
+}
+#endif /* TSCH_PACKET_EB_WITH_KLIKK_UTC */
+
+static tsch_eb_utc_sink_t klikk_eb_utc_sink;
+void
+tsch_eb_utc_sink_set(tsch_eb_utc_sink_t sink)
+{
+  klikk_eb_utc_sink = sink;
+}
+
 /*
  * We use a local packetbuf_attr array to collect necessary frame settings to
  * create an EACK because EACK is generated in the interrupt context where
@@ -289,6 +309,20 @@ tsch_packet_create_eb(uint8_t *hdr_len, uint8_t *tsch_sync_ie_offset)
   p += ie_len;
   packetbuf_set_datalen(packetbuf_datalen() + ie_len);
 
+#if TSCH_PACKET_EB_WITH_KLIKK_UTC
+  /* Klikk wall-clock IE. Placed immediately after the (fixed 8-byte) TSCH
+   * synchronization IE so tsch_packet_update_eb() can find it at a known
+   * offset (sync_offset + 8) and patch the live UTC at TX time. Built with
+   * present=0 here (ies was memset); the real value is written in update_eb
+   * for the actual TX-slot ASN, keeping the EB's ASN and UTC consistent. */
+  ie_len = frame80215e_create_ie_klikk_utc(p, packetbuf_remaininglen(), &ies);
+  if(ie_len < 0) {
+    return -1;
+  }
+  p += ie_len;
+  packetbuf_set_datalen(packetbuf_datalen() + ie_len);
+#endif /* TSCH_PACKET_EB_WITH_KLIKK_UTC */
+
   ie_len = frame80215e_create_ie_tsch_timeslot(p,
                                                packetbuf_remaininglen(),
                                                &ies);
@@ -385,9 +419,30 @@ int
 tsch_packet_update_eb(uint8_t *buf, int buf_size, uint8_t tsch_sync_ie_offset)
 {
   struct ieee802154_ies ies;
+  int ok;
   ies.ie_asn = tsch_current_asn;
   ies.ie_join_priority = tsch_join_priority;
-  return frame80215e_create_ie_tsch_synchronization(buf+tsch_sync_ie_offset, buf_size-tsch_sync_ie_offset, &ies) != -1;
+  ok = frame80215e_create_ie_tsch_synchronization(buf+tsch_sync_ie_offset, buf_size-tsch_sync_ie_offset, &ies) != -1;
+#if TSCH_PACKET_EB_WITH_KLIKK_UTC
+  if(ok) {
+    /* Patch the Klikk wall-clock IE, which create_eb placed immediately after
+     * the fixed 8-byte sync IE. Carry UTC for THIS TX-slot ASN so the EB's
+     * ASN and UTC stay consistent. present=0 when no provider / no valid
+     * clock — the IE slot still exists, leaves just ignore the value. */
+    uint8_t utc_off = tsch_sync_ie_offset + 8;
+    ies.ie_klikk_utc_present = 0;
+    ies.ie_klikk_utc_us = 0;
+    if(klikk_eb_utc_provider != NULL) {
+      int64_t utc_us;
+      if(klikk_eb_utc_provider(&utc_us)) {
+        ies.ie_klikk_utc_present = 1;
+        ies.ie_klikk_utc_us = utc_us;
+      }
+    }
+    ok = frame80215e_create_ie_klikk_utc(buf + utc_off, buf_size - utc_off, &ies) != -1;
+  }
+#endif /* TSCH_PACKET_EB_WITH_KLIKK_UTC */
+  return ok;
 }
 /*---------------------------------------------------------------------------*/
 /* Parse a IEEE 802.15.4e TSCH Enhanced Beacon (EB) */
@@ -452,6 +507,14 @@ tsch_packet_parse_eb(const uint8_t *buf, int buf_size,
 
   if(hdr_len != NULL) {
     *hdr_len += ies->ie_payload_ie_offset;
+  }
+
+  /* Klikk: hand the (ASN, UTC) anchor to the leaf app if this EB carried a
+   * valid wall-clock IE and a sink is registered. Coordinators never register
+   * a sink. ie_asn is the EB's reference ASN; the sink derives wall-clock from
+   * its own tsch_current_asn. Runs in TSCH context — the sink must be cheap. */
+  if(ies != NULL && ies->ie_klikk_utc_present && klikk_eb_utc_sink != NULL) {
+    klikk_eb_utc_sink(ies->ie_asn, ies->ie_klikk_utc_us);
   }
 
   return curr_len;
