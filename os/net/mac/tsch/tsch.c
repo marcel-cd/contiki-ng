@@ -584,6 +584,7 @@ tsch_start_coordinator(void)
 #endif
 
   tsch_is_associated = 1;
+  process_poll(&tsch_send_eb_process);
   tsch_join_priority = 0;
 
   LOG_INFO("starting as coordinator, PAN ID %x, asn-%x.%"PRIx32"\n",
@@ -745,6 +746,7 @@ tsch_associate(const struct input_packet *input_eb, rtimer_clock_t timestamp)
 
       /* Update global flags */
       tsch_is_associated = 1;
+      process_poll(&tsch_send_eb_process);
       tsch_is_pan_secured = frame.fcf.security_enabled;
       tx_count = 0;
       rx_count = 0;
@@ -932,12 +934,10 @@ PROCESS_THREAD(tsch_send_eb_process, ev, data)
 
   PROCESS_BEGIN();
 
-  /* Wait until association */
-  etimer_set(&eb_timer, CLOCK_SECOND / 10);
-  while(!tsch_is_associated) {
-    PROCESS_WAIT_UNTIL(etimer_expired(&eb_timer));
-    etimer_reset(&eb_timer);
-  }
+  /* Wait until association. Event-driven: both places that set
+   * tsch_is_associated poll this process, so an unassociated node has
+   * no 10 Hz wake-up here (it used to re-check on an etimer). */
+  PROCESS_WAIT_UNTIL(tsch_is_associated);
 
   /* Set an initial delay except for coordinator, which should send an EB asap */
   if(!tsch_is_coordinator) {
