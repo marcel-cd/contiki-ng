@@ -811,7 +811,20 @@ PT_THREAD(tsch_scan(struct pt *pt))
     /* We are not coordinator, try to associate */
     rtimer_clock_t t0;
     int is_packet_pending = 0;
-    clock_time_t now_time = clock_time();
+    clock_time_t now_time;
+
+#ifdef TSCH_CALLBACK_SCAN_HOLD
+    /* Platform hold: radio off and no association polling (no scan_timer
+     * re-arm) until the platform releases the hold and polls tsch_process.
+     * The scan then starts afresh on a newly picked channel. */
+    if(TSCH_CALLBACK_SCAN_HOLD()) {
+      NETSTACK_RADIO.off();
+      PT_WAIT_UNTIL(pt, !TSCH_CALLBACK_SCAN_HOLD());
+      current_channel = 0;
+    }
+#endif /* TSCH_CALLBACK_SCAN_HOLD */
+
+    now_time = clock_time();
 
     /* Switch to a (new) channel for scanning */
     if(current_channel == 0 || now_time - current_channel_since > TSCH_CHANNEL_SCAN_DURATION) {
